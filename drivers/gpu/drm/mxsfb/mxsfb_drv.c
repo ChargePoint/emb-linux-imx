@@ -407,7 +407,7 @@ static struct platform_driver mxsfb_platform_driver = {
 	.probe		= mxsfb_probe,
 	.remove		= mxsfb_remove,
 	.driver	= {
-		.name		= "mxsfb",
+		.name		= "mxsfb-drm",
 		.of_match_table	= mxsfb_dt_ids,
 		.pm		= &mxsfb_pm_ops,
 	},
