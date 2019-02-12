@@ -93,6 +93,8 @@ include/config
 include/generated
 include/ksym
 arch/*/include/generated
+build
+build64
 
 # stgit generated dirs
 patches-*

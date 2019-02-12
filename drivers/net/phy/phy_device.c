@@ -14,6 +14,8 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#define MARVELL_SWITCH_WORKAROUND       1
+
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
@@ -1522,6 +1524,10 @@ int genphy_update_link(struct phy_device *phydev)
 {
 	int status;
 
+#ifdef MARVELL_SWITCH_WORKAROUND
+	phydev->link = 1;
+	return 0;
+#endif
 	/* The link state is latched low so that momentary link
 	 * drops can be detected. Do not double-read the status
 	 * in polling mode to detect such short link drops.
@@ -1568,6 +1574,13 @@ int genphy_read_status(struct phy_device *phydev)
 	err = genphy_update_link(phydev);
 	if (err)
 		return err;
+
+#ifdef MARVELL_SWITCH_WORKAROUND
+	phydev->speed = SPEED_1000;
+	phydev->duplex = DUPLEX_FULL;
+	phydev->pause = phydev->asym_pause = phydev->lp_advertising = 1;
+	return 0;
+#endif
 
 	phydev->lp_advertising = 0;
 
@@ -1714,6 +1727,9 @@ int genphy_config_init(struct phy_device *phydev)
 			features |= SUPPORTED_1000baseT_Half;
 	}
 
+#ifdef MARVELL_SWITCH_WORKAROUND
+	features |= SUPPORTED_1000baseT_Full;
+#endif
 	phydev->supported &= features;
 	phydev->advertising &= features;
 
