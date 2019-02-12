@@ -496,6 +496,7 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6qp-sabresd-hdcp.dtb \
 	imx6qp-sabresd-ldo.dtb \
 	imx6qp-sabresd-ldo-pcie-cert.dtb \
+	imx6dp-chargepoint-pbc.dtb \
 	imx6qp-zii-rdu2.dtb
 dtb-$(CONFIG_SOC_IMX6SL) += \
 	imx6sl-evk.dtb \
