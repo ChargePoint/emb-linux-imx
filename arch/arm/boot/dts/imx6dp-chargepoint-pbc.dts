@@ -74,7 +74,6 @@
                     MX6QDL_PAD_GPIO_4__GPIO1_IO04               0x1b0b0 /* SOC_FLOAT_TRIP1 */
                     MX6QDL_PAD_GPIO_5__GPIO1_IO05               0x1b0b0 /* SOC_FLOAT_TRIP2 */
                     MX6QDL_PAD_GPIO_6__GPIO1_IO06               0x1b0b0 /* SER_PWR_EN */
-                    MX6QDL_PAD_GPIO_9__GPIO1_IO09               0x1b0b0 /* SOC_LED */
                     MX6QDL_PAD_GPIO_16__GPIO7_IO11              0x1b0b0 /* SOC_REED1 */
                     MX6QDL_PAD_GPIO_17__GPIO7_IO12              0x1b0b0 /* SOC_REED2 */
                     MX6QDL_PAD_GPIO_18__GPIO7_IO13              0x1b0b0 /* SOC_REED3 */
@@ -190,6 +189,9 @@
                     MX6QDL_PAD_GPIO_1__GPIO1_IO01               0x17059 /* USB_OTG_ID */
                 >;
         };
+
+        /* SOC_LED but will be pwm for fans in rev1 */
+        pinctrl_pwm1: pwm1grp { fsl,pins = < MX6QDL_PAD_GPIO_9__PWM1_OUT    0x1b0b0 >; };
 };
 
 / {
@@ -373,4 +375,10 @@
                 compatible = "fsl,pfuze100";
                 reg = <0x08>;
         };
+};
+
+&pwm1 {
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_pwm1>;
+        status = "okay";
 };
