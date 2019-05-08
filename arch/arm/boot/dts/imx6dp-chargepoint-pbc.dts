@@ -195,6 +195,10 @@
 };
 
 / {
+        aliases {
+                mmc0 = &usdhc3;
+        };
+
         regulators {
                 compatible = "simple-bus";
                 #address-cells = <1>;
