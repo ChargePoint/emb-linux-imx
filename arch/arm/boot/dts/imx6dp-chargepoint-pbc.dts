@@ -239,6 +239,10 @@
         };
 };
 
+/* disable dvfs as it appears to be causing linux hang after boot */
+&busfreq {
+    status = "disabled";
+};
 
 &fec {
         pinctrl-names = "default";
@@ -374,11 +378,12 @@
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_i2c3>;
         status = "okay";
-
+/*
         pmic: pfuze100@08 {
                 compatible = "fsl,pfuze100";
                 reg = <0x08>;
         };
+*/
 };
 
 &pwm1 {
