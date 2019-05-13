@@ -186,7 +186,7 @@
                 fsl,pins = <
                     MX6QDL_PAD_EIM_D21__GPIO3_IO21              0x1b0b0 /* USB_OTG_OCn */
                     MX6QDL_PAD_EIM_D22__GPIO3_IO22              0x1b0b0 /* USB_OTG_PWR */
-                    MX6QDL_PAD_GPIO_1__GPIO1_IO01               0x17059 /* USB_OTG_ID */
+                    MX6QDL_PAD_GPIO_1__USB_OTG_ID               0x17059 /* USB_OTG_ID */
                 >;
         };
 
@@ -214,8 +214,8 @@
                         regulator-always-on;
                         enable-active-high;
                 };
-
-                reg_eth_swh_pwr: regulator@1 { /* for eth switch */
+/*
+                reg_eth_swh_pwr: regulator@1 {
                         compatible = "regulator-fixed";
                         reg = <1>;
                         regulator-name = "eth_pwr_en";
@@ -225,7 +225,7 @@
                         regulator-always-on;
                         enable-active-high;
                 };
-
+*/
                 reg_ser_pwr: regulator@2 { /* for RS485 transceiver */
                         compatible = "regulator-fixed";
                         reg = <2>;
@@ -248,8 +248,9 @@
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_enet>;
         phy-mode = "rgmii";
-	phy-reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
-        phy-supply = <&reg_eth_swh_pwr>;
+        phy-reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+        phy-reset-duration = <2>;
+        /* phy-supply = <&reg_eth_swh_pwr>; */
         fsl,magic-packet;
         status = "okay";
 };
