@@ -6,7 +6,7 @@ threads=`expr $cores + 2`
 mkdir -p build
 make ARCH=arm mrproper
 make ARCH=arm distclean
-make O=build ARCH=arm imx_v7_pcb_defconfig
+make O=build ARCH=arm imx_v7_pbc_defconfig
 make O=build ARCH=arm zImage -j $threads
 make O=build ARCH=arm dtbs -j $threads
 make O=build ARCH=arm modules -j $threads
