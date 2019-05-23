@@ -323,7 +323,7 @@
         status = "okay";
         /* appears no driver for ADS114S08B RTD */
         spidev0: spi@0 {
-                compatible = "spidev";
+                compatible = "rohm,dh2228fv"; /* just to disable boot warning from spidev driver */
                 reg = <0>;
                 spi-max-frequency = <10000000>; /* 10Mhz, not sure if this is correct for ADS114 */
         };
