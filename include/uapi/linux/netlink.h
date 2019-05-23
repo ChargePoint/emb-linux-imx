@@ -30,6 +30,9 @@
 #define NETLINK_CRYPTO		21	/* Crypto layer */
 #define NETLINK_SMC		22	/* SMC monitoring */
 
+//keep space for few new group if comes in new release.
+#define NETLINK_CT              25      /* ChargePoint technology events */
+
 #define NETLINK_INET_DIAG	NETLINK_SOCK_DIAG
 
 #define MAX_LINKS 32		
