@@ -204,6 +204,15 @@ struct netlink_dump_control {
 	u16 min_dump_alloc;
 };
 
+#define NLMSG_NEW(skb, pid, seq, type, len, flags) \
+({      if (unlikely(skb_tailroom(skb) < (int)NLMSG_SPACE(len))) \
+                goto nlmsg_failure; \
+        __nlmsg_put(skb, pid, seq, type, len, flags); })
+
+#define NLMSG_PUT(skb, pid, seq, type, len) \
+        NLMSG_NEW(skb, pid, seq, type, len, 0)
+
+
 extern int __netlink_dump_start(struct sock *ssk, struct sk_buff *skb,
 				const struct nlmsghdr *nlh,
 				struct netlink_dump_control *control);
