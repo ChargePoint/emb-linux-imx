@@ -276,22 +276,11 @@
 &uart2 { /* RS485 */
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_uart2>;
-	control-gpios = <&gpio3 25 GPIO_ACTIVE_HIGH>, <&gpio3 28 GPIO_ACTIVE_HIGH>;
-#define M_RX_EN		1
-#define M_TX_EN		2
-	off_levels = <0>;
-	rxact_mask = <0>;
-	rxact_levels = <0>;
-	rs232_levels = <M_RX_EN>;
-	rs232_txen_mask = <0>;
-	rs232_txen_levels = <0>;
-	rs485_levels = <0xd>;
-	rs485_txen_mask = <0x3>;
-	rs485_txen_levels = <M_TX_EN>;
-	uart-has-rs485-half-duplex;
-	rs485-mode = <1>;	/* 1 to enable */
-	fsl,uart-has-rtscts;
-	status = "okay";
+        rts-gpios = <&gpio3 25 GPIO_ACTIVE_HIGH>; /* RS485_DE */
+        /* RS485_REn is set to low in uboot i.e we are always receive ready */
+        linux,rs485-enabled-at-boot-time;
+        rs485-rx-during-tx;
+        status = "okay";
 };
 
 &usbotg {
