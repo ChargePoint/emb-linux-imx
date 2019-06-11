@@ -336,13 +336,12 @@
         };
 
         /* tilt sensor */
-        lsm303dlh@1d { /* Accelerometer */
-                compatible = "st,lsm303dlhc-accel";
-                st,drdy-int-pin = <1>;
+        lsm303c_acc { /* Accelerometer */
+                compatible = "st,lsm303c_acc";
                 reg = <0x1d>;
         };
-        lsm303dlm@1e { /* Magnetometer */
-                compatible = "st,lsm303dlhc-magn";
+        lsm303c_mag { /* Magnetometer */
+                compatible = "st,lsm303c_mag";
                 reg = <0x1e>;
         };
 };
