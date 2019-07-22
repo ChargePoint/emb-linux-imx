@@ -80,6 +80,8 @@
                     MX6QDL_PAD_GPIO_19__GPIO4_IO05              0x1b0b0 /* SOC_REED4 */
 
                     MX6QDL_PAD_DISP0_DAT18__GPIO5_IO12          0x1b0b0 /* I2C PMIC ENABLE */
+                    MX6QDL_PAD_GPIO_9__GPIO1_IO09               0x1b0b0 /* SOC_LED */
+                    MX6QDL_PAD_KEY_ROW2__GPIO4_IO11             0x1b0b0 /* SOC_LED1 */
                 >;
         };
 
@@ -190,8 +192,8 @@
                 >;
         };
 
-        /* SOC_LED but will be pwm for fans in rev1 */
-        pinctrl_pwm1: pwm1grp { fsl,pins = < MX6QDL_PAD_GPIO_9__PWM1_OUT    0x1b0b0 >; };
+        pinctrl_pwm1: pwm1grp { fsl,pins = < MX6QDL_PAD_SD1_DAT3__PWM1_OUT    0x1b0b0 >; };
+        pinctrl_pwm2: pwm2grp { fsl,pins = < MX6QDL_PAD_SD1_DAT2__PWM2_OUT    0x1b0b0 >; };
 };
 
 / {
@@ -379,5 +381,11 @@
 &pwm1 {
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_pwm1>;
+        status = "okay";
+};
+
+&pwm2 {
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_pwm2>;
         status = "okay";
 };
