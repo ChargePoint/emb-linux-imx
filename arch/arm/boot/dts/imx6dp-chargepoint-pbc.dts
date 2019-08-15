@@ -64,8 +64,6 @@
                     MX6QDL_PAD_EIM_D30__GPIO3_IO30              0x1b0b0 /* SOC_THER_SW3 */
                     MX6QDL_PAD_EIM_D31__GPIO3_IO31              0x1b0b0 /* SOC_THER_SW4 */
 
-                    MX6QDL_PAD_SD4_DAT4__GPIO2_IO12             0x1b0b0 /* FAN1_SP_CTRL */
-                    MX6QDL_PAD_SD4_DAT5__GPIO2_IO13             0x1b0b0 /* FAN2_SP_CTRL */
                     MX6QDL_PAD_SD4_DAT6__GPIO2_IO14             0x1b0b0 /* FAN_TACH_DSP0 */
                     MX6QDL_PAD_SD4_DAT7__GPIO2_IO15             0x1b0b0 /* FAN_TACH_DSP1 */
 
