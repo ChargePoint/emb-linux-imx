@@ -133,9 +133,9 @@ void tipc_subscrp_report_overlap(struct tipc_subscription *sub, u32 found_lower,
 				node);
 }
 
-static void tipc_subscrp_timeout(unsigned long data)
+static void tipc_subscrp_timeout(struct timer_list *t)
 {
-	struct tipc_subscription *sub = (struct tipc_subscription *)data;
+	struct tipc_subscription *sub = from_timer(sub, t, timer);
 	struct tipc_subscriber *subscriber = sub->subscriber;
 
 	spin_lock_bh(&subscriber->lock);
@@ -303,7 +303,7 @@ static void tipc_subscrp_subscribe(struct net *net, struct tipc_subscr *s,
 	tipc_subscrb_get(subscriber);
 	spin_unlock_bh(&subscriber->lock);
 
-	setup_timer(&sub->timer, tipc_subscrp_timeout, (unsigned long)sub);
+	timer_setup(&sub->timer, tipc_subscrp_timeout, 0);
 	timeout = htohl(sub->evt.s.timeout, swap);
 
 	if (timeout != TIPC_WAIT_FOREVER)
@@ -375,7 +375,7 @@ int tipc_topsrv_start(struct net *net)
 	topsrv->tipc_conn_new		= tipc_subscrb_connect_cb;
 	topsrv->tipc_conn_release	= tipc_subscrb_release_cb;
 
-	strscpy(topsrv->name, name, sizeof(topsrv->name));
+	strncpy(topsrv->name, name, strlen(name) + 1);
 	tn->topsrv = topsrv;
 	atomic_set(&tn->subscription_count, 0);
 
