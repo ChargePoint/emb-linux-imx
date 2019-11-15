@@ -80,6 +80,8 @@ GPATH
 GRTAGS
 GSYMS
 GTAGS
+build
+build64
 
 *.orig
 *~
