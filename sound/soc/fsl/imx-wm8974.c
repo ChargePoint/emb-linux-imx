@@ -134,11 +134,10 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 	if (IS_ERR(data->codec_clk)) {
 		ret = PTR_ERR(data->codec_clk);
 		goto fail;
-	} else {
-                data->clk_frequency = clk_get_rate(data->codec_clk);
-                clk_prepare_enable(data->codec_clk);
-                /*clk_set_rate(data->codec_clk,12288000);*/
-        }
+	}
+
+        data->clk_frequency = clk_get_rate(data->codec_clk);
+        clk_prepare_enable(data->codec_clk);
 
 	data->dai.name = "HiFi";
 	data->dai.stream_name = "HiFi";
