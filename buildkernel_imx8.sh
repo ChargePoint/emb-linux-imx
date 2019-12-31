@@ -4,8 +4,9 @@ unset LDFLAGS
 cores=`cat /proc/cpuinfo | grep processor | wc -l`
 threads=`expr $cores + 2`
 ARCHTYPE=arm64
-mkdir -p build64
-make ARCH=$ARCHTYPE mrproper
-make ARCH=$ARCHTYPE distclean
-make O=build ARCH=$ARCHTYPE ucb_defconfig
-make O=build ARCH=$ARCHTYPE -j $threads
+OUTDIR=build64
+mkdir -p $OUTDIR
+make O=$OUTDIR ARCH=$ARCHTYPE mrproper
+make O=$OUTDIR ARCH=$ARCHTYPE distclean
+make O=$OUTDIR ARCH=$ARCHTYPE ucb_defconfig
+make O=$OUTDIR ARCH=$ARCHTYPE -j $threads
