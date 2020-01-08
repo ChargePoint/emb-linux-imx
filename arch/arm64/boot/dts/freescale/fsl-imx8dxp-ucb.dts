@@ -26,30 +26,39 @@
 		stdout-path = &lpuart0;
 	};
 
-        regulators {
-                compatible = "simple-bus";
-                #address-cells = <1>;
-                #size-cells = <0>;
-                reg_audio: fixedregulator@0 {
-                        compatible = "regulator-fixed";
-                        reg = <0>;
-                        regulator-name = "wm8974_supply";
-                        regulator-min-microvolt = <3300000>;
-                        regulator-max-microvolt = <3300000>;
-                        regulator-always-on;
-                };
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg_audio: fixedregulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "wm8974_supply";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
 
-                reg_spk_pwren: regulator@1 {
-                        compatible = "regulator-fixed";
-                        reg = <1>;
-                        regulator-name = "spk_pwren";
-                        regulator-min-microvolt = <5000000>;
-                        regulator-max-microvolt = <5000000>;
-                        gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>;
-                        enable-active-high;
-                        regulator-always-on;
-                };
-        };
+		reg_spk_pwren: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "spk_pwren";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-always-on;
+		};
+
+		reg_adc_vref_1v8: adc_vref_1v8 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "vref_1v8";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-always-on;
+		};
+	};
 
 	lvds_backlight0: lvds_backlight@0 {
 		compatible = "pwm-backlight";
@@ -67,6 +76,17 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
+	};
+
+	sound: sound {
+		compatible = "fsl,imx-audio-wm8974";
+		model = "wm8974-audio";
+		cpu-dai = <&sai0>;
+		audio-codec = <&wm8974>;
+		audio-routing =
+			"Ext Spk", "MONOOUT",
+			"Mic", "Mic Bias",
+			"MICN", "Mic";
 	};
 
 };
@@ -103,7 +123,7 @@
 			        SC_P_MCLK_IN0_LSIO_GPIO0_IO19                   0xC0000041 /* RFID_PWR_EN */
 
 			        SC_P_MIPI_DSI0_GPIO0_00_MIPI_DSI0_PWM0_OUT      0x00000020 /* LCD_PWM */
-			        SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28         0xC0000041 /* LCD_SEL_6or8 */
+			        SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28         0xC0000041 /* LCD_SEL_10H_8L */
 			        SC_P_QSPI0A_DATA0_LSIO_GPIO3_IO09               0xC0000041 /* LCD_REV_SCAN */
 			        SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10               0xC0000041 /* LCD_3V3_EN */
 			        SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11               0xC0000041 /* LCD_BLU_EN */
@@ -259,8 +279,8 @@
 		        >;
 	        };
 
-	        pinctrl_sai0: sai0grp {
-                        fsl,pins = <
+			pinctrl_sai0: sai0grp {
+				fsl,pins = <
 			        SC_P_SAI0_RXD_ADMA_SAI0_RXD                         0x06000040
 			        SC_P_SAI0_TXC_ADMA_SAI0_TXC                         0x06000040
 			        SC_P_SAI0_TXFS_ADMA_SAI0_TXFS                       0x06000040
@@ -268,6 +288,12 @@
 			        SC_P_MCLK_OUT0_ADMA_ACM_MCLK_OUT0                   0x0600004c
 		        >;
 	        };
+
+			pinctrl_adc0: adc0grp {
+				fsl,pins = <
+					SC_P_ADC_IN0_ADMA_ADC_IN0		0x60
+				>;
+			};
         };
 };
 
@@ -498,15 +524,11 @@
 &sai0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sai0>;
-        /* TODO: fix clocks for audio master mode */
 	assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 			<&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
-			<&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>;
-        assigned-clock-rates = <786432000>, <49152000>, <24576000>, <12288000>;
-	/* TODO revisit: not documented in DT bindings but as per fsl_sai.c need below
-	   properties to configure sai as tx/rx master. See soc-dai.h SND_SOC_DAIFMT_CBS_CFS */
-	fsl,sai-txmasterflag = <4>;
-	fsl,sai-rxmasterflag = <4>;
+			<&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
+			<&clk IMX8QXP_AUD_SAI_0_MCLK>;
+	assigned-clock-rates = <786432000>, <49152000>, <12288000>, <49152000>;
 	status = "okay";
 };
 
@@ -520,21 +542,21 @@
 
 	/* USBHUB I2C and PTN5150A resides on this i2c as well but should require no  adjustments from ucb */
 
-        wm8974: wm8974@1a {
-                compatible = "wlf,wm8974";
-                reg = <0x1a>;
-                clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
-                clock-names = "mclk";
-                wlf,shared-lrclk;
-                DCVDD-supply = <&reg_audio>;
-                DBVDD-supply = <&reg_audio>;
-                AVDD-supply = <&reg_audio>;
-                CPVDD-supply = <&reg_audio>;
-                PLLVDD-supply = <&reg_audio>;
-                SPKVDD1-supply = <&reg_spk_pwren>;
-                SPKVDD2-supply = <&reg_spk_pwren>;
-                amic-mono;
-        };
+	wm8974: wm8974@1a {
+		compatible = "wlf,wm8974";
+		reg = <0x1a>;
+		clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
+		clock-names = "mclk";
+		assigned-clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
+		assigned-clock-rates = <12288000>;
+		DCVDD-supply = <&reg_audio>;
+		DBVDD-supply = <&reg_audio>;
+		AVDD-supply = <&reg_audio>;
+		CPVDD-supply = <&reg_audio>;
+		PLLVDD-supply = <&reg_audio>;
+		SPKVDD1-supply = <&reg_spk_pwren>;
+		SPKVDD2-supply = <&reg_spk_pwren>;
+	};
 
 	/* RTC and tamper TODO: driver needs to be ported from upstream */
 	ucb_rtc: pcf85363@51 {
@@ -552,12 +574,12 @@
 	pinctrl-0 = <&pinctrl_lpi2c2>;
 	status = "okay";
 
-        ux_temp_sensor: tc74@48 {
+	ux_temp_sensor: tc74@48 {
 		compatible = "tc74";
 		reg = <0x48>;
 	};
 
-        /* TODO: add backlight */
+	/* TODO: add backlight */
 
 };
 
@@ -569,7 +591,7 @@
 	pinctrl-0 = <&pinctrl_lpi2c3>;
 	status = "okay";
 
-        /* PCIe clock generator 9FGV0241 no driver require */
+	/* PCIe clock generator 9FGV0241 no driver require */
 
 	ucb_temp_sensor: tc74@4d {
 		compatible = "tc74";
@@ -639,5 +661,12 @@
 };
 
 &cameradev {
+	status = "okay";
+};
+
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	vref-supply = <&reg_adc_vref_1v8>;
 	status = "okay";
 };
