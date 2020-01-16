@@ -1,0 +1,672 @@
+/*
+ * Copyright 2017-2018 NXP
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+
+#include "fsl-imx8dxp.dtsi"
+/* Refer fsl-imx8qxp-mek.dtsi and imx6qp-cpnk.dtsi */
+
+/ {
+	model = "Freescale i.MX8DXP UCB";
+        compatible = "fsl,imx8dxp-ucb", "fsl,imx8dxp", "fsl,imx8qxp";
+
+	chosen {
+		bootargs = "console=ttyLP0,115200 earlycon=lpuart32,0x5a060000,115200";
+		stdout-path = &lpuart0;
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg_audio: fixedregulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "wm8974_supply";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
+
+		reg_spk_pwren: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "spk_pwren";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-always-on;
+		};
+
+		reg_adc_vref_1v8: adc_vref_1v8 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "vref_1v8";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-always-on;
+		};
+	};
+
+	lvds_backlight0: lvds_backlight@0 {
+		compatible = "pwm-backlight";
+		pwms = <&pwm_mipi_lvds0 0 100000 0>;
+
+		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
+				     10 11 12 13 14 15 16 17 18 19
+				     20 21 22 23 24 25 26 27 28 29
+				     30 31 32 33 34 35 36 37 38 39
+				     40 41 42 43 44 45 46 47 48 49
+				     50 51 52 53 54 55 56 57 58 59
+				     60 61 62 63 64 65 66 67 68 69
+				     70 71 72 73 74 75 76 77 78 79
+				     80 81 82 83 84 85 86 87 88 89
+				     90 91 92 93 94 95 96 97 98 99
+				    100>;
+		default-brightness-level = <80>;
+	};
+
+	sound: sound {
+		compatible = "fsl,imx-audio-wm8974";
+		model = "wm8974-audio";
+		cpu-dai = <&sai0>;
+		audio-codec = <&wm8974>;
+		audio-routing =
+			"Ext Spk", "MONOOUT",
+			"Mic", "Mic Bias",
+			"MICN", "Mic";
+	};
+
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog>;
+	iomuxc-imx8dxp-ucb {
+	        pinctrl_hog: hoggrp {
+		        fsl,pins = <
+			        SC_P_SPI3_SCK_LSIO_GPIO0_IO13                   0xC0000041 /* CSI0_GPIO1 */
+			        SC_P_SPI3_SDI_LSIO_GPIO0_IO15                   0xC0000041 /* CSI0_GPIO2 */
+			        SC_P_SPI3_SDO_LSIO_GPIO0_IO14                   0xC0000041 /* CSI0_GPIO3 */
+			        SC_P_SPI3_CS0_LSIO_GPIO0_IO16                   0xC0000041 /* CSI0_GPIO4 */
+			        SC_P_MIPI_CSI0_GPIO0_00_LSIO_GPIO3_IO08         0xC0000041 /* CSI_GPIO_5 */
+			        SC_P_MIPI_CSI0_GPIO0_01_LSIO_GPIO3_IO07         0xC0000041 /* CSI_GPIO_6 */
+			        SC_P_MIPI_CSI0_MCLK_OUT_MIPI_CSI0_ACM_MCLK_OUT  0xC0000041 /* CSI_XVCLK */
+
+			        SC_P_SAI1_RXD_LSIO_GPIO0_IO29                   0xC0000041 /* SER_PWR_EN */
+			        SC_P_SAI1_RXC_LSIO_GPIO0_IO30                   0xC0000041 /* MAG_INT_B */
+			        SC_P_SAI1_RXFS_LSIO_GPIO0_IO31                  0xC0000041 /* MAG_DRDY */
+			        SC_P_MIPI_DSI0_I2C0_SCL_LSIO_GPIO1_IO25         0xC0000041 /* RTC_IRQn */
+			        SC_P_MIPI_DSI0_I2C0_SDA_LSIO_GPIO1_IO26         0xC0000041 /* ACCEL_INT_B */
+			        SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29         0xC0000041 /* CHG_CAPGOOD */
+			        SC_P_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30         0xC0000041 /* CHGn_PFW */
+			        SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13                 0xC0000041 /* CHG_ENABLE */
+			        SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14               0xC0000041 /* Tamper_TEST */
+			        SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15               0xC0000041 /* Tamper_RST_N */
+
+			        SC_P_CSI_EN_LSIO_GPIO3_IO02                     0xC0000041 /* UX_5V_OC */
+			        SC_P_CSI_RESET_LSIO_GPIO3_IO03                  0xC0000041 /* UX_GSTIC_RSTn */
+			        SC_P_CSI_MCLK_LSIO_GPIO3_IO01                   0xC0000041 /* UX_PWR_EN */
+			        SC_P_CSI_PCLK_LSIO_GPIO3_IO00                   0xC0000041 /* UX_GSTIC_TS */
+			        SC_P_MCLK_IN0_LSIO_GPIO0_IO19                   0xC0000041 /* RFID_PWR_EN */
+
+			        SC_P_MIPI_DSI0_GPIO0_00_MIPI_DSI0_PWM0_OUT      0x00000020 /* LCD_PWM */
+			        SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28         0xC0000041 /* LCD_SEL_10H_8L */
+			        SC_P_QSPI0A_DATA0_LSIO_GPIO3_IO09               0xC0000041 /* LCD_REV_SCAN */
+			        SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10               0xC0000041 /* LCD_3V3_EN */
+			        SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11               0xC0000041 /* LCD_BLU_EN */
+			        SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12               0xC0000041 /* SPK_PWREN */
+
+			        SC_P_QSPI0B_SS0_B_LSIO_GPIO3_IO23               0xC0000041 /* WIFI_WAKE_B */
+			        SC_P_QSPI0B_SS1_B_LSIO_GPIO3_IO24               0xC0000041 /* WIFI_PCIE_W_DISABLEn */
+			        SC_P_QSPI0B_SCLK_LSIO_GPIO3_IO17                0xC0000041 /* WIFI_EN */
+			        SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18               0xC0000041 /* ENET0_INT */
+			        SC_P_QSPI0B_DATA1_LSIO_GPIO3_IO19               0xC0000041 /* ENET0_PPS */
+			        SC_P_QSPI0B_DATA2_LSIO_GPIO3_IO20               0xC0000041 /* ENET1_INT */
+			        SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21               0xC0000041 /* ENET1_PPS */
+
+			        SC_P_USB_SS3_TC2_LSIO_GPIO4_IO05                0xC0000041 /* USBHUB_FLEXCMD */
+			        SC_P_SPI0_CS0_LSIO_GPIO1_IO08                   0xC0000041 /* GPIO2_0 / LED */
+			        SC_P_SPI0_CS1_LSIO_GPIO1_IO07                   0xC0000041 /* GPIO2_1 / LED */
+			        SC_P_SPI0_SCK_LSIO_GPIO1_IO04                   0xC0000041 /* GPIO2_2 / ETH0_RST_B */
+			        SC_P_SPI0_SDI_LSIO_GPIO1_IO05                   0xC0000041 /* GPIO2_3 / ETH1_RST_B */
+			        SC_P_SPI0_SDO_LSIO_GPIO1_IO06                   0xC0000041 /* GPIO2_4 / USB_RST_N */
+
+			        SC_P_SPI2_CS0_LSIO_GPIO1_IO00                   0xC0000041 /* GPIO2_5 / MOD_ENBL */
+			        SC_P_SPI2_SCK_LSIO_GPIO1_IO03                   0xC0000041 /* GPIO2_6 / MOD_eRST */
+			        SC_P_SPI2_SDI_LSIO_GPIO1_IO02                   0xC0000041 /* GPIO2_7 / MOD_IGT */
+			        SC_P_SPI2_SDO_LSIO_GPIO1_IO01                   0xC0000041 /* GPIO2_8 / MOD_STATUS_IO */
+		        >;
+	        };
+
+	        pinctrl_pcieb: pcieagrp {
+		        fsl,pins = <
+			        SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00         0x06000021
+			        SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01        0x06000021
+			        SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02          0x04000021
+		        >;
+	        };
+
+	        pinctrl_usdhc1: usdhc1grp {
+		        fsl,pins = <
+			        SC_P_EMMC0_CLK_CONN_EMMC0_CLK                   0x06000041
+			        SC_P_EMMC0_CMD_CONN_EMMC0_CMD                   0x00000021
+			        SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0               0x00000021
+			        SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1               0x00000021
+			        SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2               0x00000021
+			        SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3               0x00000021
+			        SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4               0x00000021
+			        SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5               0x00000021
+			        SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6               0x00000021
+			        SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7               0x00000021
+			        SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE             0x00000041
+			        /*SC_P_EMMC0_RESET_B_LSIO_GPIO4_IO18              0xC0000041*/  /*Reset not connected in UCB*/
+		        >;
+	        };
+
+	        pinctrl_lpuart0: lpuart0grp {
+		        fsl,pins = <
+			        SC_P_UART0_RX_ADMA_UART0_RX                     0x06000020
+			        SC_P_UART0_TX_ADMA_UART0_TX                     0x06000020
+		        >;
+	        };
+
+	        pinctrl_lpuart1: lpuart1grp {
+		        fsl,pins = <
+			        SC_P_UART1_TX_ADMA_UART1_TX                     0x06000020
+			        SC_P_UART1_RX_ADMA_UART1_RX                     0x06000020
+			        SC_P_UART1_RTS_B_ADMA_UART1_RTS_B               0x06000020
+			        SC_P_UART1_CTS_B_ADMA_UART1_CTS_B               0x06000020
+		        >;
+	        };
+
+	        pinctrl_lpuart2: lpuart2grp {
+		        fsl,pins = <
+			        SC_P_UART2_TX_ADMA_UART2_TX                     0x06000020
+			        SC_P_UART2_RX_ADMA_UART2_RX                     0x06000020
+		        >;
+	        };
+
+	        pinctrl_fec1: fec1grp {
+		        fsl,pins = <
+			        SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0_PAD          0x000014a0
+			        SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1_PAD          0x000014a0
+			        SC_P_ENET0_MDC_CONN_ENET0_MDC                       0x06000020
+			        SC_P_ENET0_MDIO_CONN_ENET0_MDIO                     0x06000020
+			        SC_P_ENET0_RGMII_TX_CTL_CONN_ENET0_RGMII_TX_CTL     0x00000061
+			        SC_P_ENET0_RGMII_TXC_CONN_ENET0_RGMII_TXC           0x00000061
+			        SC_P_ENET0_RGMII_TXD0_CONN_ENET0_RGMII_TXD0         0x00000061
+			        SC_P_ENET0_RGMII_TXD1_CONN_ENET0_RGMII_TXD1         0x00000061
+			        SC_P_ENET0_RGMII_TXD2_CONN_ENET0_RGMII_TXD2         0x00000061
+			        SC_P_ENET0_RGMII_TXD3_CONN_ENET0_RGMII_TXD3         0x00000061
+			        SC_P_ENET0_RGMII_RXC_CONN_ENET0_RGMII_RXC           0x00000061
+			        SC_P_ENET0_RGMII_RX_CTL_CONN_ENET0_RGMII_RX_CTL     0x00000061
+			        SC_P_ENET0_RGMII_RXD0_CONN_ENET0_RGMII_RXD0         0x00000061
+			        SC_P_ENET0_RGMII_RXD1_CONN_ENET0_RGMII_RXD1         0x00000061
+			        SC_P_ENET0_RGMII_RXD2_CONN_ENET0_RGMII_RXD2         0x00000061
+			        SC_P_ENET0_RGMII_RXD3_CONN_ENET0_RGMII_RXD3         0x00000061
+		        >;
+	        };
+
+	        pinctrl_fec2: fec2grp {
+		        fsl,pins = <
+			        SC_P_ESAI0_SCKR_CONN_ENET1_RGMII_TX_CTL             0x00000060
+			        SC_P_ESAI0_FSR_CONN_ENET1_RGMII_TXC                 0x00000060
+			        SC_P_ESAI0_TX4_RX1_CONN_ENET1_RGMII_TXD0            0x00000060
+			        SC_P_ESAI0_TX5_RX0_CONN_ENET1_RGMII_TXD1            0x00000060
+			        SC_P_ESAI0_FST_CONN_ENET1_RGMII_TXD2                0x00000060
+			        SC_P_ESAI0_SCKT_CONN_ENET1_RGMII_TXD3               0x00000060
+			        SC_P_ESAI0_TX0_CONN_ENET1_RGMII_RXC                 0x00000060
+			        SC_P_SPDIF0_TX_CONN_ENET1_RGMII_RX_CTL              0x00000060
+			        SC_P_SPDIF0_RX_CONN_ENET1_RGMII_RXD0                0x00000060
+			        SC_P_ESAI0_TX3_RX2_CONN_ENET1_RGMII_RXD1            0x00000060
+			        SC_P_ESAI0_TX2_RX3_CONN_ENET1_RGMII_RXD2            0x00000060
+			        SC_P_ESAI0_TX1_CONN_ENET1_RGMII_RXD3                0x00000060
+                        >;
+                };
+
+	        pinctrl_flexcan1: flexcan0grp {
+		        fsl,pins = <
+			        SC_P_FLEXCAN0_TX_ADMA_FLEXCAN0_TX                   0x21
+			        SC_P_FLEXCAN0_RX_ADMA_FLEXCAN0_RX                   0x21
+                        >;
+	        };
+
+	        pinctrl_flexcan2: flexcan1grp {
+		        fsl,pins = <
+			        SC_P_FLEXCAN1_TX_ADMA_FLEXCAN1_TX                   0x21
+			        SC_P_FLEXCAN1_RX_ADMA_FLEXCAN1_RX                   0x21
+                        >;
+	        };
+
+                pinctrl_csi0_lpi2c0: csi0lpi2c0grp {
+                        fsl,pins = <
+                                SC_P_MIPI_CSI0_I2C0_SCL_MIPI_CSI0_I2C0_SCL          0xc2000020
+                                SC_P_MIPI_CSI0_I2C0_SDA_MIPI_CSI0_I2C0_SDA          0xc2000020
+                        >;
+                };
+
+                pinctrl_lpi2c1: lpi1cgrp {
+		        fsl,pins = <
+			        SC_P_USB_SS3_TC1_ADMA_I2C1_SCL                      0x06000021
+			        SC_P_USB_SS3_TC3_ADMA_I2C1_SDA                      0x06000021
+		        >;
+	        };
+
+                pinctrl_lpi2c2: lpi2cgrp {
+		        fsl,pins = <
+			        SC_P_MIPI_DSI1_GPIO0_00_ADMA_I2C2_SCL               0x06000021
+			        SC_P_MIPI_DSI1_GPIO0_01_ADMA_I2C2_SDA               0x06000021
+		        >;
+	        };
+
+                pinctrl_lpi2c3: lpi3cgrp {
+		        fsl,pins = <
+			        SC_P_SPI3_CS1_ADMA_I2C3_SCL                         0x06000021
+			        SC_P_MCLK_IN1_ADMA_I2C3_SDA                         0x06000021
+		        >;
+	        };
+
+			pinctrl_sai0: sai0grp {
+				fsl,pins = <
+			        SC_P_SAI0_RXD_ADMA_SAI0_RXD                         0x06000040
+			        SC_P_SAI0_TXC_ADMA_SAI0_TXC                         0x06000040
+			        SC_P_SAI0_TXFS_ADMA_SAI0_TXFS                       0x06000040
+			        SC_P_SAI0_TXD_ADMA_SAI0_TXD                         0x06000060
+			        SC_P_MCLK_OUT0_ADMA_ACM_MCLK_OUT0                   0x0600004c
+		        >;
+	        };
+
+			pinctrl_adc0: adc0grp {
+				fsl,pins = <
+					SC_P_ADC_IN0_ADMA_ADC_IN0		0x60
+				>;
+			};
+        };
+};
+
+&acm {
+	status = "okay";
+};
+
+&pd_dma_lpuart0 {
+	debug_console;
+};
+
+/* serial debug console */
+&lpuart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart0>;
+	status = "okay";
+};
+
+/* bluetooth on wifi */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1>;
+	status = "okay";
+};
+
+/* rfid */
+&lpuart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart2>;
+	status = "okay";
+};
+
+&flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+	status = "okay";
+};
+
+&flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	status = "okay";
+};
+
+/* emmc */
+&usdhc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	bus-width = <8>;
+	non-removable;
+	status = "okay";
+};
+
+&fec1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec1>;
+	phy-mode = "rgmii-txid";
+	phy-handle = <&ethphy0>;
+	/* TODO: phy-reset? */
+	fsl,magic-packet;
+	fsl,rgmii_rxc_dly;
+	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			at803x,eee-disabled;
+			at803x,vddio-1p8v;
+		};
+
+		ethphy1: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+			at803x,eee-disabled;
+			at803x,vddio-1p8v;
+			status = "okay";
+		};
+	};
+};
+
+&fec2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec2>;
+	phy-mode = "rgmii-txid";
+	phy-handle = <&ethphy1>;
+	/* TODO: phy-reset? */
+	fsl,magic-packet;
+	fsl,rgmii_rxc_dly;
+	status = "okay";
+};
+
+&pcieb {
+	ext_osc = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>;
+	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+&usbphy1 {
+	fsl,tx-d-cal = <114>;
+};
+
+&usbotg1 {
+	srp-disable;
+	hnp-disable;
+	adp-disable;
+	power-polarity-active-high;
+	disable-over-current;
+	status = "okay";
+};
+
+&usbotg3 {
+	dr_mode = "otg";
+	status = "okay";
+	/* TODO: need extcon to ptn5150a? */
+};
+
+/* TODO: revisit required dpr and pgr channels */
+&pixel_combiner {
+	status = "okay";
+};
+
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};
+
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&ldb1_phy {
+	status = "okay";
+};
+
+&ldb1 {
+	status = "okay";
+
+	lvds-channel@0 {
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <24>;
+		status = "okay";
+		primary;
+
+		/* TODO: values imay need to be rework (copied from cpnk) */
+		display-timings {
+			native-mode = <&ampire>;
+			ampire: AM-1024768Y2TZQW-A2H {
+				clock-frequency = <65000000>;
+				hactive = <1024>;
+				vactive = <768>;
+				hback-porch = <220>;
+				hfront-porch = <40>;
+				vback-porch = <21>;
+				vfront-porch = <7>;
+				hsync-len = <60>;
+				vsync-len = <10>;
+			};
+		};
+	};
+};
+
+&pwm_mipi_lvds0 {
+	status = "okay";
+};
+
+&sai0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai0>;
+	assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
+			<&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
+			<&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
+			<&clk IMX8QXP_AUD_SAI_0_MCLK>;
+	assigned-clock-rates = <786432000>, <49152000>, <12288000>, <49152000>;
+	status = "okay";
+};
+
+&i2c1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c1>;
+	status = "okay";
+
+	/* USBHUB I2C and PTN5150A resides on this i2c as well but should require no  adjustments from ucb */
+
+	wm8974: wm8974@1a {
+		compatible = "wlf,wm8974";
+		reg = <0x1a>;
+		clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
+		clock-names = "mclk";
+		assigned-clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
+		assigned-clock-rates = <12288000>;
+		DCVDD-supply = <&reg_audio>;
+		DBVDD-supply = <&reg_audio>;
+		AVDD-supply = <&reg_audio>;
+		CPVDD-supply = <&reg_audio>;
+		PLLVDD-supply = <&reg_audio>;
+		SPKVDD1-supply = <&reg_spk_pwren>;
+		SPKVDD2-supply = <&reg_spk_pwren>;
+	};
+
+	/* RTC and tamper TODO: driver needs to be ported from upstream */
+	ucb_rtc: pcf85363@51 {
+		compatible = "nxp,pcf85363";
+		reg = <0x51>;
+	};
+};
+
+/* UX board sensors and GestIC */
+&i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c2>;
+	status = "okay";
+
+	ux_temp_sensor: tc74@48 {
+		compatible = "tc74";
+		reg = <0x48>;
+	};
+
+	/* TODO: add backlight */
+
+};
+
+&i2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c3>;
+	status = "okay";
+
+	/* PCIe clock generator 9FGV0241 no driver require */
+
+	ucb_temp_sensor: tc74@4d {
+		compatible = "tc74";
+		reg = <0x4d>;
+	};
+
+	eeprom: eeprom@50 {
+		compatible = "microchip,24c16";
+		reg = <0x50>;
+		pagesize = <16>;
+	};
+
+	/* tilt sensor */
+	lsm303c_acc@1d { /* Accelerometer */
+		compatible = "st,lsm303c_acc";
+		reg = <0x1d>;
+	};
+	lsm303c_mag@1e { /* Magnetometer */
+		compatible = "st,lsm303c_mag";
+		reg = <0x1e>;
+	};
+};
+
+
+/* camera interface i2c */
+&i2c0_csi0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_csi0_lpi2c0>;
+	clock-frequency = <100000>;
+	status = "okay";
+	/* TODO: add camera slave */
+};
+
+&mipi_csi_0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	virtual-channel;
+	status = "okay";
+
+	/* Camera 0  MIPI CSI-2 (CSI0) */
+	port@0 {
+		reg = <0>;
+		mipi_csi0_ep: endpoint {
+			/* TODO: remote-endpoint = <camera_ep>; */
+			data-lanes = <1 2 3 4>;
+		};
+	};
+};
+
+/* One isi_x for 4 VCx of MIPI CSI0 respectively */
+&isi_0 {
+	status = "okay";
+};
+
+&isi_1 {
+	status = "okay";
+};
+
+&isi_2 {
+	status = "okay";
+};
+
+&isi_3 {
+	status = "okay";
+};
+
+&cameradev {
+	status = "okay";
+};
+
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	vref-supply = <&reg_adc_vref_1v8>;
+	status = "okay";
+};
