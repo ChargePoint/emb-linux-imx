@@ -558,7 +558,6 @@
 		SPKVDD2-supply = <&reg_spk_pwren>;
 	};
 
-	/* RTC and tamper TODO: driver needs to be ported from upstream */
 	ucb_rtc: pcf85363@51 {
 		compatible = "nxp,pcf85363";
 		reg = <0x51>;
