@@ -57,7 +57,6 @@ static const struct snd_soc_dapm_widget imx_wm8974_dapm_widgets[] = {
 
 static int imx_wm8974_probe(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
 	struct device_node *ssi_np, *codec_np;
 	struct platform_device *ssi_pdev;
 	struct i2c_client *codec_dev;
@@ -97,13 +96,14 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 	}
 
 	data->clk_frequency = clk_get_rate(data->codec_clk);
-	//clk_prepare_enable(data->codec_clk);//enabled by fsl sai driver
+	clk_prepare_enable(data->codec_clk);
 
 	data->dai.name = "HiFi";
 	data->dai.stream_name = "HiFi";
 	data->dai.codec_dai_name = "wm8974-hifi";
 	data->dai.codec_of_node = codec_np;
 	data->dai.cpu_of_node = ssi_np;
+	data->dai.cpu_dai_name = dev_name(&ssi_pdev->dev);
 	data->dai.platform_of_node = ssi_np;
 	data->dai.init = &imx_wm8974_dai_init;
 	data->dai.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |

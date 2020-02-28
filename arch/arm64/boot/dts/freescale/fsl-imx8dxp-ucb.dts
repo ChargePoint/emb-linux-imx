@@ -26,6 +26,21 @@
 		stdout-path = &lpuart0;
 	};
 
+	aliases {
+		gpio0 = &gpio0;
+		gpio1 = &gpio1;
+		gpio2 = &gpio2;
+		gpio3 = &gpio3;
+		gpio4 = &gpio4;
+		gpio5 = &gpio5;
+		gpio6 = &gpio6;
+		gpio7 = &gpio7;
+		i2c0 = &i2c0;
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		i2c3 = &i2c3;
+	};
+
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -50,19 +65,38 @@
 			regulator-always-on;
 		};
 
-		reg_adc_vref_1v8: adc_vref_1v8 {
+		reg_adc_vref_1v8: regulator@2 {
 			compatible = "regulator-fixed";
-			reg = <2>;
-			regulator-name = "vref_1v8";
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
+			regulator-name = "adc-vref_1v8";
+			regulator-always-on;
+		};
+
+		reg_can_pwr: regulator@3 {
+			compatible = "regulator-fixed";
+			regulator-name = "can-pwr-en";
+			gpio = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
+
+		reg_wifi_pwr_on: regulator@4 {
+			compatible = "regulator-fixed";
+			regulator-name = "wifi-pwr-en";
+			gpio = <&gpio3 17 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
+
+		reg_ux_pwr_on: regulator@5 {
+			compatible = "regulator-fixed";
+			regulator-name = "ux-pwr-en";
+			gpio = <&gpio3 1 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
 			regulator-always-on;
 		};
 	};
 
 	lvds_backlight0: lvds_backlight@0 {
 		compatible = "pwm-backlight";
-		pwms = <&pwm_mipi_lvds0 0 100000 0>;
+		pwms = <&pwm_mipi_lvds0 0 2000000 0>; /* 500 Hz */
 
 		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
 				     10 11 12 13 14 15 16 17 18 19
@@ -86,9 +120,8 @@
 		audio-routing =
 			"Ext Spk", "MONOOUT",
 			"Mic", "Mic Bias",
-			"MICN", "Mic";
+			"MICP", "Mic";
 	};
-
 };
 
 &iomuxc {
@@ -109,12 +142,10 @@
 			        SC_P_SAI1_RXC_LSIO_GPIO0_IO30                   0xC0000041 /* MAG_INT_B */
 			        SC_P_SAI1_RXFS_LSIO_GPIO0_IO31                  0xC0000041 /* MAG_DRDY */
 			        SC_P_MIPI_DSI0_I2C0_SCL_LSIO_GPIO1_IO25         0xC0000041 /* RTC_IRQn */
-			        SC_P_MIPI_DSI0_I2C0_SDA_LSIO_GPIO1_IO26         0xC0000041 /* ACCEL_INT_B */
-			        SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29         0xC0000041 /* CHG_CAPGOOD */
-			        SC_P_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30         0xC0000041 /* CHGn_PFW */
+			        SC_P_MIPI_DSI0_I2C0_SDA_LSIO_GPIO1_IO26         0xC0000001 /* ACCEL_INT_B */
+			        SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29         0xC0000021 /* CHG_CAPGOOD */
+			        SC_P_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30         0xC0000021 /* CHGn_PFW */
 			        SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13                 0xC0000041 /* CHG_ENABLE */
-			        SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14               0xC0000041 /* Tamper_TEST */
-			        SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15               0xC0000041 /* Tamper_RST_N */
 
 			        SC_P_CSI_EN_LSIO_GPIO3_IO02                     0xC0000041 /* UX_5V_OC */
 			        SC_P_CSI_RESET_LSIO_GPIO3_IO03                  0xC0000041 /* UX_GSTIC_RSTn */
@@ -329,12 +360,14 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
+	xceiver-supply = <&reg_can_pwr>;
 	status = "okay";
 };
 
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
+	xceiver-supply = <&reg_can_pwr>;
 	status = "okay";
 };
 
@@ -352,10 +385,10 @@
 	pinctrl-0 = <&pinctrl_fec1>;
 	phy-mode = "rgmii-txid";
 	phy-handle = <&ethphy0>;
-	/* TODO: phy-reset? */
 	fsl,magic-packet;
 	fsl,rgmii_rxc_dly;
 	status = "okay";
+	fsl,ar8031-phy-fixup; /* enables phy 1.8V mode */
 
 	mdio {
 		#address-cells = <1>;
@@ -383,10 +416,10 @@
 	pinctrl-0 = <&pinctrl_fec2>;
 	phy-mode = "rgmii-txid";
 	phy-handle = <&ethphy1>;
-	/* TODO: phy-reset? */
 	fsl,magic-packet;
 	fsl,rgmii_rxc_dly;
 	status = "okay";
+	fsl,ar8031-phy-fixup; /* enables phy 1.8V mode */
 };
 
 &pcieb {
@@ -395,6 +428,7 @@
 	pinctrl-0 = <&pinctrl_pcieb>;
 	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
 	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	epdev_on-supply = <&reg_wifi_pwr_on>;
 	status = "okay";
 };
 
@@ -414,7 +448,6 @@
 &usbotg3 {
 	dr_mode = "otg";
 	status = "okay";
-	/* TODO: need extcon to ptn5150a? */
 };
 
 /* TODO: revisit required dpr and pgr channels */
@@ -482,6 +515,14 @@
 	status = "okay";
 };
 
+&gpu_3d0 {
+	status = "okay";
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
 &dpu1 {
 	status = "okay";
 };
@@ -495,7 +536,7 @@
 
 	lvds-channel@0 {
 		fsl,data-mapping = "spwg";
-		fsl,data-width = <24>;
+		fsl,data-width = <18>;
 		status = "okay";
 		primary;
 
@@ -504,8 +545,8 @@
 			native-mode = <&ampire>;
 			ampire: AM-1024768Y2TZQW-A2H {
 				clock-frequency = <65000000>;
-				hactive = <1024>;
-				vactive = <768>;
+				hactive = <800>;
+				vactive = <600>;
 				hback-porch = <220>;
 				hfront-porch = <40>;
 				vback-porch = <21>;
@@ -526,9 +567,8 @@
 	pinctrl-0 = <&pinctrl_sai0>;
 	assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 			<&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
-			<&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
 			<&clk IMX8QXP_AUD_SAI_0_MCLK>;
-	assigned-clock-rates = <786432000>, <49152000>, <12288000>, <49152000>;
+	assigned-clock-rates = <786432000>, <49152000>, <49152000>;
 	status = "okay";
 };
 
@@ -547,8 +587,9 @@
 		reg = <0x1a>;
 		clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
 		clock-names = "mclk";
-		assigned-clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
-		assigned-clock-rates = <12288000>;
+		assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>, <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>, <&clk IMX8QXP_AUD_MCLKOUT0>;
+		assigned-clock-rates = <786432000>, <12288000>, <12288000>;
+		power-domains = <&pd_mclk_out0>;
 		DCVDD-supply = <&reg_audio>;
 		DBVDD-supply = <&reg_audio>;
 		AVDD-supply = <&reg_audio>;
@@ -558,7 +599,6 @@
 		SPKVDD2-supply = <&reg_spk_pwren>;
 	};
 
-	/* RTC and tamper TODO: driver needs to be ported from upstream */
 	ucb_rtc: pcf85363@51 {
 		compatible = "nxp,pcf85363";
 		reg = <0x51>;
@@ -579,8 +619,10 @@
 		reg = <0x48>;
 	};
 
-	/* TODO: add backlight */
-
+	ux_dpot: ux_dpot@2f {
+		compatible = "microchip,mcp4531-104";
+		reg = <0x2f>;
+	};
 };
 
 &i2c3 {
@@ -604,14 +646,9 @@
 		pagesize = <16>;
 	};
 
-	/* tilt sensor */
-	lsm303c_acc@1d { /* Accelerometer */
-		compatible = "st,lsm303c_acc";
-		reg = <0x1d>;
-	};
-	lsm303c_mag@1e { /* Magnetometer */
-		compatible = "st,lsm303c_mag";
-		reg = <0x1e>;
+	lcd_dpot@2e {
+		compatible = "microchip,mcp4531-502";
+		reg = <0x2e>;
 	};
 };
 
