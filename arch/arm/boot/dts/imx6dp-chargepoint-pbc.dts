@@ -354,7 +354,7 @@
 
         gpio-controller@77 { /* power module interface */
                 compatible = "nxp,pca9539";
-                reg = <0x74>;
+                reg = <0x77>;
                 gpio-controller;
                 #gpio-cells = <2>;
                 interrupt-parent = <&gpio1>;
