@@ -352,9 +352,9 @@
         pinctrl-0 = <&pinctrl_i2c2>;
         status = "okay";
 
-        gpio-controller@77 { /* power module interface */
+        gpio-controller@74 { /* power module interface */
                 compatible = "nxp,pca9539";
-                reg = <0x77>;
+                reg = <0x74>;
                 gpio-controller;
                 #gpio-cells = <2>;
                 interrupt-parent = <&gpio1>;
