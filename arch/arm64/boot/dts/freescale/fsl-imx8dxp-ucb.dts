@@ -650,6 +650,17 @@
 		compatible = "microchip,mcp4531-502";
 		reg = <0x2e>;
 	};
+
+	/* tilt sensor */
+	lsm303agr_acc@19 { /* Accelerometer */
+		compatible = "st,lsm303agr-accel";
+		reg = <0x19>;
+	};
+	lsm303agr_mag@1e { /* Magnetometer */
+		compatible = "st,lsm303agr-magn";
+		reg = <0x1e>;
+		st,drdy-int-pin = <1>;
+	};
 };
 
 
