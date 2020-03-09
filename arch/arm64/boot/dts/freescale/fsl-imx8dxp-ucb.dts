@@ -538,7 +538,6 @@
 		fsl,data-mapping = "spwg";
 		fsl,data-width = <18>;
 		status = "okay";
-		primary;
 
 		/* TODO: values imay need to be rework (copied from cpnk) */
 		display-timings {
@@ -716,5 +715,18 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_adc0>;
 	vref-supply = <&reg_adc_vref_1v8>;
+	status = "okay";
+};
+
+&vpu {
+	status = "okay";
+};
+
+&vpu_decoder {
+	core_type = <1>;
+	status = "okay";
+};
+
+&vpu_encoder {
 	status = "okay";
 };
