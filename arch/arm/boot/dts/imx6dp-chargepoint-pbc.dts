@@ -335,13 +335,14 @@
         };
 
         /* tilt sensor */
-        lsm303c_acc { /* Accelerometer */
-                compatible = "st,lsm303c_acc";
-                reg = <0x1d>;
+        lsm303agr_acc@19 { /* Accelerometer */
+                compatible = "st,lsm303agr-accel";
+                reg = <0x19>;
         };
-        lsm303c_mag { /* Magnetometer */
-                compatible = "st,lsm303c_mag";
+        lsm303agr_mag@1e { /* Magnetometer */
+                compatible = "st,lsm303agr-magn";
                 reg = <0x1e>;
+                st,drdy-int-pin = <1>;
         };
 };
 
@@ -351,7 +352,7 @@
         pinctrl-0 = <&pinctrl_i2c2>;
         status = "okay";
 
-        gpio-controller@77 { /* power module interface */
+        gpio-controller@74 { /* power module interface */
                 compatible = "nxp,pca9539";
                 reg = <0x74>;
                 gpio-controller;
