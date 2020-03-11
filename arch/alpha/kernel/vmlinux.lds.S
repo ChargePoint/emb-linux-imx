@@ -1,7 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/thread_info.h>
 #include <asm/cache.h>
 #include <asm/page.h>
+#include <asm/setup.h>
 
 OUTPUT_FORMAT("elf64-alpha")
 OUTPUT_ARCH(alpha)
@@ -21,10 +23,12 @@ SECTIONS
 		HEAD_TEXT
 		TEXT_TEXT
 		SCHED_TEXT
+		CPUIDLE_TEXT
 		LOCK_TEXT
 		*(.fixup)
 		*(.gnu.warning)
 	} :kernel
+	swapper_pg_dir = SWAPPER_PGD;
 	_etext = .;	/* End of text section */
 
 	NOTES :kernel :note

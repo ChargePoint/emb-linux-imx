@@ -20,6 +20,8 @@
  *
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -31,10 +33,9 @@
 #include <asm/processor.h>
 #include <asm/msr.h>
 #include <asm/timer.h>
+#include <asm/cpu_device_id.h>
 
 #include "speedstep-lib.h"
-
-#define PFX	"p4-clockmod: "
 
 /*
  * Duty Cycle (3bits), note DC_DISABLE is not specified in
@@ -57,8 +58,7 @@ static int cpufreq_p4_setdc(unsigned int cpu, unsigned int newstate)
 {
 	u32 l, h;
 
-	if (!cpu_online(cpu) ||
-	    (newstate > DC_DISABLE) || (newstate == DC_RESV))
+	if ((newstate > DC_DISABLE) || (newstate == DC_RESV))
 		return -EINVAL;
 
 	rdmsr_on_cpu(cpu, MSR_IA32_THERM_STATUS, &l, &h);
@@ -92,63 +92,31 @@ static int cpufreq_p4_setdc(unsigned int cpu, unsigned int newstate)
 
 
 static struct cpufreq_frequency_table p4clockmod_table[] = {
-	{DC_RESV, CPUFREQ_ENTRY_INVALID},
-	{DC_DFLT, 0},
-	{DC_25PT, 0},
-	{DC_38PT, 0},
-	{DC_50PT, 0},
-	{DC_64PT, 0},
-	{DC_75PT, 0},
-	{DC_88PT, 0},
-	{DC_DISABLE, 0},
-	{DC_RESV, CPUFREQ_TABLE_END},
+	{0, DC_RESV, CPUFREQ_ENTRY_INVALID},
+	{0, DC_DFLT, 0},
+	{0, DC_25PT, 0},
+	{0, DC_38PT, 0},
+	{0, DC_50PT, 0},
+	{0, DC_64PT, 0},
+	{0, DC_75PT, 0},
+	{0, DC_88PT, 0},
+	{0, DC_DISABLE, 0},
+	{0, DC_RESV, CPUFREQ_TABLE_END},
 };
 
 
-static int cpufreq_p4_target(struct cpufreq_policy *policy,
-			     unsigned int target_freq,
-			     unsigned int relation)
+static int cpufreq_p4_target(struct cpufreq_policy *policy, unsigned int index)
 {
-	unsigned int    newstate = DC_RESV;
-	struct cpufreq_freqs freqs;
 	int i;
-
-	if (cpufreq_frequency_table_target(policy, &p4clockmod_table[0],
-				target_freq, relation, &newstate))
-		return -EINVAL;
-
-	freqs.old = cpufreq_p4_get(policy->cpu);
-	freqs.new = stock_freq * p4clockmod_table[newstate].index / 8;
-
-	if (freqs.new == freqs.old)
-		return 0;
-
-	/* notifiers */
-	for_each_cpu(i, policy->cpus) {
-		freqs.cpu = i;
-		cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
-	}
 
 	/* run on each logical CPU,
 	 * see section 13.15.3 of IA32 Intel Architecture Software
 	 * Developer's Manual, Volume 3
 	 */
 	for_each_cpu(i, policy->cpus)
-		cpufreq_p4_setdc(i, p4clockmod_table[newstate].index);
-
-	/* notifiers */
-	for_each_cpu(i, policy->cpus) {
-		freqs.cpu = i;
-		cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
-	}
+		cpufreq_p4_setdc(i, p4clockmod_table[index].driver_data);
 
 	return 0;
-}
-
-
-static int cpufreq_p4_verify(struct cpufreq_policy *policy)
-{
-	return cpufreq_frequency_table_verify(policy, &p4clockmod_table[0]);
 }
 
 
@@ -156,11 +124,7 @@ static unsigned int cpufreq_p4_get_frequency(struct cpuinfo_x86 *c)
 {
 	if (c->x86 == 0x06) {
 		if (cpu_has(c, X86_FEATURE_EST))
-			printk_once(KERN_WARNING PFX "Warning: EST-capable "
-			       "CPU detected. The acpi-cpufreq module offers "
-			       "voltage scaling in addition to frequency "
-			       "scaling. You should use that instead of "
-			       "p4-clockmod, if possible.\n");
+			pr_warn_once("Warning: EST-capable CPU detected. The acpi-cpufreq module offers voltage scaling in addition to frequency scaling. You should use that instead of p4-clockmod, if possible.\n");
 		switch (c->x86_model) {
 		case 0x0E: /* Core */
 		case 0x0F: /* Core Duo */
@@ -184,11 +148,7 @@ static unsigned int cpufreq_p4_get_frequency(struct cpuinfo_x86 *c)
 	p4clockmod_driver.flags |= CPUFREQ_CONST_LOOPS;
 
 	if (speedstep_detect_processor() == SPEEDSTEP_CPU_P4M) {
-		printk(KERN_WARNING PFX "Warning: Pentium 4-M detected. "
-		       "The speedstep-ich or acpi cpufreq modules offer "
-		       "voltage scaling in addition of frequency scaling. "
-		       "You should use either one instead of p4-clockmod, "
-		       "if possible.\n");
+		pr_warn("Warning: Pentium 4-M detected. The speedstep-ich or acpi cpufreq modules offer voltage scaling in addition of frequency scaling. You should use either one instead of p4-clockmod, if possible.\n");
 		return speedstep_get_frequency(SPEEDSTEP_CPU_P4M);
 	}
 
@@ -204,11 +164,11 @@ static int cpufreq_p4_cpu_init(struct cpufreq_policy *policy)
 	unsigned int i;
 
 #ifdef CONFIG_SMP
-	cpumask_copy(policy->cpus, cpu_sibling_mask(policy->cpu));
+	cpumask_copy(policy->cpus, topology_sibling_cpumask(policy->cpu));
 #endif
 
 	/* Errata workaround */
-	cpuid = (c->x86 << 8) | (c->x86_model << 4) | c->x86_mask;
+	cpuid = (c->x86 << 8) | (c->x86_model << 4) | c->x86_stepping;
 	switch (cpuid) {
 	case 0x0f07:
 	case 0x0f0a:
@@ -236,24 +196,16 @@ static int cpufreq_p4_cpu_init(struct cpufreq_policy *policy)
 		else
 			p4clockmod_table[i].frequency = (stock_freq * i)/8;
 	}
-	cpufreq_frequency_table_get_attr(p4clockmod_table, policy->cpu);
 
 	/* cpuinfo and default policy values */
 
 	/* the transition latency is set to be 1 higher than the maximum
 	 * transition latency of the ondemand governor */
 	policy->cpuinfo.transition_latency = 10000001;
-	policy->cur = stock_freq;
 
-	return cpufreq_frequency_table_cpuinfo(policy, &p4clockmod_table[0]);
+	return cpufreq_table_validate_and_show(policy, &p4clockmod_table[0]);
 }
 
-
-static int cpufreq_p4_cpu_exit(struct cpufreq_policy *policy)
-{
-	cpufreq_frequency_table_put_attr(policy->cpu);
-	return 0;
-}
 
 static unsigned int cpufreq_p4_get(unsigned int cpu)
 {
@@ -273,43 +225,39 @@ static unsigned int cpufreq_p4_get(unsigned int cpu)
 	return stock_freq;
 }
 
-static struct freq_attr *p4clockmod_attr[] = {
-	&cpufreq_freq_attr_scaling_available_freqs,
-	NULL,
-};
-
 static struct cpufreq_driver p4clockmod_driver = {
-	.verify		= cpufreq_p4_verify,
-	.target		= cpufreq_p4_target,
+	.verify		= cpufreq_generic_frequency_table_verify,
+	.target_index	= cpufreq_p4_target,
 	.init		= cpufreq_p4_cpu_init,
-	.exit		= cpufreq_p4_cpu_exit,
 	.get		= cpufreq_p4_get,
 	.name		= "p4-clockmod",
-	.owner		= THIS_MODULE,
-	.attr		= p4clockmod_attr,
+	.attr		= cpufreq_generic_attr,
 };
 
+static const struct x86_cpu_id cpufreq_p4_id[] = {
+	{ X86_VENDOR_INTEL, X86_FAMILY_ANY, X86_MODEL_ANY, X86_FEATURE_ACC },
+	{}
+};
+
+/*
+ * Intentionally no MODULE_DEVICE_TABLE here: this driver should not
+ * be auto loaded.  Please don't add one.
+ */
 
 static int __init cpufreq_p4_init(void)
 {
-	struct cpuinfo_x86 *c = &cpu_data(0);
 	int ret;
 
 	/*
 	 * THERM_CONTROL is architectural for IA32 now, so
 	 * we can rely on the capability checks
 	 */
-	if (c->x86_vendor != X86_VENDOR_INTEL)
-		return -ENODEV;
-
-	if (!test_cpu_cap(c, X86_FEATURE_ACPI) ||
-				!test_cpu_cap(c, X86_FEATURE_ACC))
+	if (!x86_match_cpu(cpufreq_p4_id) || !boot_cpu_has(X86_FEATURE_ACPI))
 		return -ENODEV;
 
 	ret = cpufreq_register_driver(&p4clockmod_driver);
 	if (!ret)
-		printk(KERN_INFO PFX "P4/Xeon(TM) CPU On-Demand Clock "
-				"Modulation available\n");
+		pr_info("P4/Xeon(TM) CPU On-Demand Clock Modulation available\n");
 
 	return ret;
 }

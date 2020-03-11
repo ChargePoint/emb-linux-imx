@@ -14,7 +14,13 @@
  * Do memcpy(), but trap and return "n" when a load or store faults.
  *
  * Note: this idiom only works when memcpy() compiles to a leaf function.
- * If "sp" is updated during memcpy, the "jrp lr" will be incorrect.
+ * Here leaf function not only means it does not have calls, but also
+ * requires no stack operations (sp, stack frame pointer) and no
+ * use of callee-saved registers, else "jrp lr" will be incorrect since
+ * unwinding stack frame is bypassed. Since memcpy() is not complex so
+ * these conditions are satisfied here, but we need to be careful when
+ * modifying this file. This is not a clean solution but is the best
+ * one so far.
  *
  * Also note that we are capturing "n" from the containing scope here.
  */
@@ -22,9 +28,10 @@
 #define _ST(p, inst, v)						\
 	({							\
 		asm("1: " #inst " %0, %1;"			\
-		    ".pushsection .coldtext.memcpy,\"ax\";"	\
+		    ".pushsection .coldtext,\"ax\";"	\
 		    "2: { move r0, %2; jrp lr };"		\
 		    ".section __ex_table,\"a\";"		\
+		    ".align 8;"					\
 		    ".quad 1b, 2b;"				\
 		    ".popsection"				\
 		    : "=m" (*(p)) : "r" (v), "r" (n));		\
@@ -34,16 +41,17 @@
 	({							\
 		unsigned long __v;				\
 		asm("1: " #inst " %0, %1;"			\
-		    ".pushsection .coldtext.memcpy,\"ax\";"	\
+		    ".pushsection .coldtext,\"ax\";"	\
 		    "2: { move r0, %2; jrp lr };"		\
 		    ".section __ex_table,\"a\";"		\
+		    ".align 8;"					\
 		    ".quad 1b, 2b;"				\
 		    ".popsection"				\
 		    : "=r" (__v) : "m" (*(p)), "r" (n));	\
 		__v;						\
 	})
 
-#define USERCOPY_FUNC __copy_to_user_inatomic
+#define USERCOPY_FUNC raw_copy_to_user
 #define ST1(p, v) _ST((p), st1, (v))
 #define ST2(p, v) _ST((p), st2, (v))
 #define ST4(p, v) _ST((p), st4, (v))
@@ -54,7 +62,7 @@
 #define LD8 LD
 #include "memcpy_64.c"
 
-#define USERCOPY_FUNC __copy_from_user_inatomic
+#define USERCOPY_FUNC raw_copy_from_user
 #define ST1 ST
 #define ST2 ST
 #define ST4 ST
@@ -65,7 +73,7 @@
 #define LD8(p) _LD((p), ld)
 #include "memcpy_64.c"
 
-#define USERCOPY_FUNC __copy_in_user_inatomic
+#define USERCOPY_FUNC raw_copy_in_user
 #define ST1(p, v) _ST((p), st1, (v))
 #define ST2(p, v) _ST((p), st2, (v))
 #define ST4(p, v) _ST((p), st4, (v))
@@ -75,12 +83,3 @@
 #define LD4(p) _LD((p), ld4u)
 #define LD8(p) _LD((p), ld)
 #include "memcpy_64.c"
-
-unsigned long __copy_from_user_zeroing(void *to, const void __user *from,
-				       unsigned long n)
-{
-	unsigned long rc = __copy_from_user_inatomic(to, from, n);
-	if (unlikely(rc))
-		memset(to + n - rc, 0, rc);
-	return rc;
-}

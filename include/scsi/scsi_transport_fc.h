@@ -28,8 +28,11 @@
 #define SCSI_TRANSPORT_FC_H
 
 #include <linux/sched.h>
+#include <linux/bsg-lib.h>
+#include <asm/unaligned.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_netlink.h>
+#include <scsi/scsi_host.h>
 
 struct scsi_transport_template;
 
@@ -126,10 +129,16 @@ enum fc_vport_state {
 					     incapable of reporting */
 #define FC_PORTSPEED_1GBIT		1
 #define FC_PORTSPEED_2GBIT		2
-#define FC_PORTSPEED_4GBIT		4
-#define FC_PORTSPEED_10GBIT		8
+#define FC_PORTSPEED_10GBIT		4
+#define FC_PORTSPEED_4GBIT		8
 #define FC_PORTSPEED_8GBIT		0x10
 #define FC_PORTSPEED_16GBIT		0x20
+#define FC_PORTSPEED_32GBIT		0x40
+#define FC_PORTSPEED_20GBIT		0x80
+#define FC_PORTSPEED_40GBIT		0x100
+#define FC_PORTSPEED_50GBIT		0x200
+#define FC_PORTSPEED_100GBIT		0x400
+#define FC_PORTSPEED_25GBIT		0x800
 #define FC_PORTSPEED_NOT_NEGOTIATED	(1 << 15) /* Speed not established */
 
 /*
@@ -153,6 +162,7 @@ enum fc_tgtid_binding_type  {
 #define FC_PORT_ROLE_FCP_TARGET			0x01
 #define FC_PORT_ROLE_FCP_INITIATOR		0x02
 #define FC_PORT_ROLE_IP_PORT			0x04
+#define FC_PORT_ROLE_FCP_DUMMY_INITIATOR	0x08
 
 /* The following are for compatibility */
 #define FC_RPORT_ROLE_UNKNOWN			FC_PORT_ROLE_UNKNOWN
@@ -426,6 +436,18 @@ struct fc_host_statistics {
 	u64 fcp_control_requests;
 	u64 fcp_input_megabytes;
 	u64 fcp_output_megabytes;
+	u64 fcp_packet_alloc_failures;	/* fcp packet allocation failures */
+	u64 fcp_packet_aborts;		/* fcp packet aborted */
+	u64 fcp_frame_alloc_failures;	/* fcp frame allocation failures */
+
+	/* fc exches statistics */
+	u64 fc_no_free_exch;		/* no free exch memory */
+	u64 fc_no_free_exch_xid;	/* no free exch id */
+	u64 fc_xid_not_found;		/* exch not found for a response */
+	u64 fc_xid_busy;		/* exch exist for new a request */
+	u64 fc_seq_not_found;		/* seq is not found for exchange */
+	u64 fc_non_bls_resp;		/* a non BLS response frame with
+					   a sequence responder in new exch */
 };
 
 
@@ -486,6 +508,13 @@ struct fc_host_attrs {
 	u32 maxframe_size;
 	u16 max_npiv_vports;
 	char serial_number[FC_SERIAL_NUMBER_SIZE];
+	char manufacturer[FC_SERIAL_NUMBER_SIZE];
+	char model[FC_SYMBOLIC_NAME_SIZE];
+	char model_description[FC_SYMBOLIC_NAME_SIZE];
+	char hardware_version[FC_VERSION_STRING_SIZE];
+	char driver_version[FC_VERSION_STRING_SIZE];
+	char firmware_version[FC_VERSION_STRING_SIZE];
+	char optionrom_version[FC_VERSION_STRING_SIZE];
 
 	/* Dynamic Attributes */
 	u32 port_id;
@@ -541,6 +570,20 @@ struct fc_host_attrs {
 	(((struct fc_host_attrs *)(x)->shost_data)->max_npiv_vports)
 #define fc_host_serial_number(x)	\
 	(((struct fc_host_attrs *)(x)->shost_data)->serial_number)
+#define fc_host_manufacturer(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->manufacturer)
+#define fc_host_model(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->model)
+#define fc_host_model_description(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->model_description)
+#define fc_host_hardware_version(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->hardware_version)
+#define fc_host_driver_version(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->driver_version)
+#define fc_host_firmware_version(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->firmware_version)
+#define fc_host_optionrom_version(x)	\
+	(((struct fc_host_attrs *)(x)->shost_data)->optionrom_version)
 #define fc_host_port_id(x)	\
 	(((struct fc_host_attrs *)(x)->shost_data)->port_id)
 #define fc_host_port_type(x)	\
@@ -584,48 +627,6 @@ struct fc_host_attrs {
 #define fc_host_dev_loss_tmo(x) \
 	(((struct fc_host_attrs *)(x)->shost_data)->dev_loss_tmo)
 
-
-struct fc_bsg_buffer {
-	unsigned int payload_len;
-	int sg_cnt;
-	struct scatterlist *sg_list;
-};
-
-/* Values for fc_bsg_job->state_flags (bitflags) */
-#define FC_RQST_STATE_INPROGRESS	0
-#define FC_RQST_STATE_DONE		1
-
-struct fc_bsg_job {
-	struct Scsi_Host *shost;
-	struct fc_rport *rport;
-	struct device *dev;
-	struct request *req;
-	spinlock_t job_lock;
-	unsigned int state_flags;
-	unsigned int ref_cnt;
-	void (*job_done)(struct fc_bsg_job *);
-
-	struct fc_bsg_request *request;
-	struct fc_bsg_reply *reply;
-	unsigned int request_len;
-	unsigned int reply_len;
-	/*
-	 * On entry : reply_len indicates the buffer size allocated for
-	 * the reply.
-	 *
-	 * Upon completion : the message handler must set reply_len
-	 *  to indicates the size of the reply to be returned to the
-	 *  caller.
-	 */
-
-	/* DMA payloads for the request/response */
-	struct fc_bsg_buffer request_payload;
-	struct fc_bsg_buffer reply_payload;
-
-	void *dd_data;			/* Used for driver-specific storage */
-};
-
-
 /* The functions by which the transport class and the driver communicate */
 struct fc_function_template {
 	void    (*get_rport_dev_loss_tmo)(struct fc_rport *);
@@ -657,13 +658,9 @@ struct fc_function_template {
 	int	(*vport_disable)(struct fc_vport *, bool);
 	int  	(*vport_delete)(struct fc_vport *);
 
-	/* target-mode drivers' functions */
-	int     (* tsk_mgmt_response)(struct Scsi_Host *, u64, u64, int);
-	int     (* it_nexus_response)(struct Scsi_Host *, u64, int);
-
 	/* bsg support */
-	int	(*bsg_request)(struct fc_bsg_job *);
-	int	(*bsg_timeout)(struct fc_bsg_job *);
+	int	(*bsg_request)(struct bsg_job *);
+	int	(*bsg_timeout)(struct bsg_job *);
 
 	/* allocation lengths for host-specific data */
 	u32	 			dd_fcrport_size;
@@ -700,6 +697,13 @@ struct fc_function_template {
 	unsigned long	show_host_supported_speeds:1;
 	unsigned long	show_host_maxframe_size:1;
 	unsigned long	show_host_serial_number:1;
+	unsigned long	show_host_manufacturer:1;
+	unsigned long	show_host_model:1;
+	unsigned long	show_host_model_description:1;
+	unsigned long	show_host_hardware_version:1;
+	unsigned long	show_host_driver_version:1;
+	unsigned long	show_host_firmware_version:1;
+	unsigned long	show_host_optionrom_version:1;
 	/* host dynamic attributes */
 	unsigned long	show_host_port_id:1;
 	unsigned long	show_host_port_type:1;
@@ -751,22 +755,12 @@ fc_remote_port_chkready(struct fc_rport *rport)
 
 static inline u64 wwn_to_u64(u8 *wwn)
 {
-	return (u64)wwn[0] << 56 | (u64)wwn[1] << 48 |
-	    (u64)wwn[2] << 40 | (u64)wwn[3] << 32 |
-	    (u64)wwn[4] << 24 | (u64)wwn[5] << 16 |
-	    (u64)wwn[6] <<  8 | (u64)wwn[7];
+	return get_unaligned_be64(wwn);
 }
 
 static inline void u64_to_wwn(u64 inm, u8 *wwn)
 {
-	wwn[0] = (inm >> 56) & 0xff;
-	wwn[1] = (inm >> 48) & 0xff;
-	wwn[2] = (inm >> 40) & 0xff;
-	wwn[3] = (inm >> 32) & 0xff;
-	wwn[4] = (inm >> 24) & 0xff;
-	wwn[5] = (inm >> 16) & 0xff;
-	wwn[6] = (inm >> 8) & 0xff;
-	wwn[7] = inm & 0xff;
+	put_unaligned_be64(inm, wwn);
 }
 
 /**
@@ -810,6 +804,22 @@ void fc_host_post_vendor_event(struct Scsi_Host *shost, u32 event_number,
 struct fc_vport *fc_vport_create(struct Scsi_Host *shost, int channel,
 		struct fc_vport_identifiers *);
 int fc_vport_terminate(struct fc_vport *vport);
+int fc_block_rport(struct fc_rport *rport);
 int fc_block_scsi_eh(struct scsi_cmnd *cmnd);
+enum blk_eh_timer_return fc_eh_timed_out(struct scsi_cmnd *scmd);
+
+static inline struct Scsi_Host *fc_bsg_to_shost(struct bsg_job *job)
+{
+	if (scsi_is_host_device(job->dev))
+		return dev_to_shost(job->dev);
+	return rport_to_shost(dev_to_rport(job->dev));
+}
+
+static inline struct fc_rport *fc_bsg_to_rport(struct bsg_job *job)
+{
+	if (scsi_is_fc_rport(job->dev))
+		return dev_to_rport(job->dev);
+	return NULL;
+}
 
 #endif /* SCSI_TRANSPORT_FC_H */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /* IO interface mux allocator for ETRAX100LX.
  * Copyright 2004-2007, Axis Communications AB
  */
@@ -14,6 +15,7 @@
 #include <arch/svinto.h>
 #include <asm/io.h>
 #include <arch/io_interface_mux.h>
+#include <arch/system.h>
 
 
 #define DBG(s)

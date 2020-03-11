@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Based upon linux/arch/m68k/mm/sun3mmu.c
  * Based upon linux/arch/ppc/mm/mmu_context.c
@@ -27,11 +28,7 @@ mm_context_t next_mmu_context;
 unsigned long context_map[LAST_CONTEXT / BITS_PER_LONG + 1];
 atomic_t nr_free_contexts;
 struct mm_struct *context_mm[LAST_CONTEXT+1];
-extern unsigned long num_pages;
-
-void free_initmem(void)
-{
-}
+unsigned long num_pages;
 
 /*
  * ColdFire paging_init derived from sun3.
@@ -87,7 +84,7 @@ void __init paging_init(void)
 
 int cf_tlb_miss(struct pt_regs *regs, int write, int dtlb, int extension_word)
 {
-	unsigned long flags, mmuar;
+	unsigned long flags, mmuar, mmutr;
 	struct mm_struct *mm;
 	pgd_t *pgd;
 	pmd_t *pmd;
@@ -137,9 +134,10 @@ int cf_tlb_miss(struct pt_regs *regs, int write, int dtlb, int extension_word)
 	if (!pte_dirty(*pte) && !KMAPAREA(mmuar))
 		set_pte(pte, pte_wrprotect(*pte));
 
-	mmu_write(MMUTR, (mmuar & PAGE_MASK) | (asid << MMUTR_IDN) |
-		(((int)(pte->pte) & (int)CF_PAGE_MMUTR_MASK)
-		>> CF_PAGE_MMUTR_SHIFT) | MMUTR_V);
+	mmutr = (mmuar & PAGE_MASK) | (asid << MMUTR_IDN) | MMUTR_V;
+	if ((mmuar < TASK_UNMAPPED_BASE) || (mmuar >= TASK_SIZE))
+		mmutr |= (pte->pte & CF_PAGE_MMUTR_MASK) >> CF_PAGE_MMUTR_SHIFT;
+	mmu_write(MMUTR, mmutr);
 
 	mmu_write(MMUDR, (pte_val(*pte) & PAGE_MASK) |
 		((pte->pte) & CF_PAGE_MMUDR_MASK) | MMUDR_SZ_8KB | MMUDR_X);
@@ -151,6 +149,35 @@ int cf_tlb_miss(struct pt_regs *regs, int write, int dtlb, int extension_word)
 
 	local_irq_restore(flags);
 	return 0;
+}
+
+void __init cf_bootmem_alloc(void)
+{
+	unsigned long start_pfn;
+	unsigned long memstart;
+
+	/* _rambase and _ramend will be naturally page aligned */
+	m68k_memory[0].addr = _rambase;
+	m68k_memory[0].size = _ramend - _rambase;
+
+	/* compute total pages in system */
+	num_pages = PFN_DOWN(_ramend - _rambase);
+
+	/* page numbers */
+	memstart = PAGE_ALIGN(_ramstart);
+	min_low_pfn = PFN_DOWN(_rambase);
+	start_pfn = PFN_DOWN(memstart);
+	max_pfn = max_low_pfn = PFN_DOWN(_ramend);
+	high_memory = (void *)_ramend;
+
+	m68k_virt_to_node_shift = fls(_ramend - 1) - 6;
+	module_fixup(NULL, __start_fixup, __stop_fixup);
+
+	/* setup bootmem data */
+	m68k_setup_node(0);
+	memstart += init_bootmem_node(NODE_DATA(0), start_pfn,
+		min_low_pfn, max_low_pfn);
+	free_bootmem_node(NODE_DATA(0), memstart, _ramend - memstart);
 }
 
 /*

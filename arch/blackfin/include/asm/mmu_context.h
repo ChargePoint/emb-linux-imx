@@ -9,6 +9,8 @@
 
 #include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/mm_types.h>
+
 #include <asm/setup.h>
 #include <asm/page.h>
 #include <asm/pgalloc.h>
@@ -30,8 +32,11 @@ extern void *l1sram_alloc_max(void*);
 static inline void free_l1stack(void)
 {
 	nr_l1stack_tasks--;
-	if (nr_l1stack_tasks == 0)
+	if (nr_l1stack_tasks == 0) {
 		l1sram_free(l1_stack_base);
+		l1_stack_base = NULL;
+		l1_stack_len = 0;
+	}
 }
 
 static inline unsigned long

@@ -23,12 +23,13 @@
 #include <linux/atomic.h>
 
 #define DM_MSG_PREFIX	"multipath queue-length"
-#define QL_MIN_IO	128
-#define QL_VERSION	"0.1.0"
+#define QL_MIN_IO	1
+#define QL_VERSION	"0.2.0"
 
 struct selector {
 	struct list_head	valid_paths;
 	struct list_head	failed_paths;
+	spinlock_t lock;
 };
 
 struct path_info {
@@ -45,6 +46,7 @@ static struct selector *alloc_selector(void)
 	if (s) {
 		INIT_LIST_HEAD(&s->valid_paths);
 		INIT_LIST_HEAD(&s->failed_paths);
+		spin_lock_init(&s->lock);
 	}
 
 	return s;
@@ -112,6 +114,8 @@ static int ql_add_path(struct path_selector *ps, struct dm_path *path,
 	struct selector *s = ps->context;
 	struct path_info *pi;
 	unsigned repeat_count = QL_MIN_IO;
+	char dummy;
+	unsigned long flags;
 
 	/*
 	 * Arguments: [<repeat_count>]
@@ -123,9 +127,14 @@ static int ql_add_path(struct path_selector *ps, struct dm_path *path,
 		return -EINVAL;
 	}
 
-	if ((argc == 1) && (sscanf(argv[0], "%u", &repeat_count) != 1)) {
+	if ((argc == 1) && (sscanf(argv[0], "%u%c", &repeat_count, &dummy) != 1)) {
 		*error = "queue-length ps: invalid repeat count";
 		return -EINVAL;
+	}
+
+	if (repeat_count > 1) {
+		DMWARN_LIMIT("repeat_count > 1 is deprecated, using 1 instead");
+		repeat_count = 1;
 	}
 
 	/* Allocate the path information structure */
@@ -141,7 +150,9 @@ static int ql_add_path(struct path_selector *ps, struct dm_path *path,
 
 	path->pscontext = pi;
 
+	spin_lock_irqsave(&s->lock, flags);
 	list_add_tail(&pi->list, &s->valid_paths);
+	spin_unlock_irqrestore(&s->lock, flags);
 
 	return 0;
 }
@@ -150,16 +161,22 @@ static void ql_fail_path(struct path_selector *ps, struct dm_path *path)
 {
 	struct selector *s = ps->context;
 	struct path_info *pi = path->pscontext;
+	unsigned long flags;
 
+	spin_lock_irqsave(&s->lock, flags);
 	list_move(&pi->list, &s->failed_paths);
+	spin_unlock_irqrestore(&s->lock, flags);
 }
 
 static int ql_reinstate_path(struct path_selector *ps, struct dm_path *path)
 {
 	struct selector *s = ps->context;
 	struct path_info *pi = path->pscontext;
+	unsigned long flags;
 
+	spin_lock_irqsave(&s->lock, flags);
 	list_move_tail(&pi->list, &s->valid_paths);
+	spin_unlock_irqrestore(&s->lock, flags);
 
 	return 0;
 }
@@ -167,14 +184,16 @@ static int ql_reinstate_path(struct path_selector *ps, struct dm_path *path)
 /*
  * Select a path having the minimum number of in-flight I/Os
  */
-static struct dm_path *ql_select_path(struct path_selector *ps,
-				      unsigned *repeat_count, size_t nr_bytes)
+static struct dm_path *ql_select_path(struct path_selector *ps, size_t nr_bytes)
 {
 	struct selector *s = ps->context;
 	struct path_info *pi = NULL, *best = NULL;
+	struct dm_path *ret = NULL;
+	unsigned long flags;
 
+	spin_lock_irqsave(&s->lock, flags);
 	if (list_empty(&s->valid_paths))
-		return NULL;
+		goto out;
 
 	/* Change preferred (first in list) path to evenly balance. */
 	list_move_tail(s->valid_paths.next, &s->valid_paths);
@@ -189,11 +208,12 @@ static struct dm_path *ql_select_path(struct path_selector *ps,
 	}
 
 	if (!best)
-		return NULL;
+		goto out;
 
-	*repeat_count = best->repeat_count;
-
-	return best->path;
+	ret = best->path;
+out:
+	spin_unlock_irqrestore(&s->lock, flags);
+	return ret;
 }
 
 static int ql_start_io(struct path_selector *ps, struct dm_path *path,

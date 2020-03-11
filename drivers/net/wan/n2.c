@@ -330,7 +330,6 @@ static void n2_destroy_card(card_t *card)
 static const struct net_device_ops n2_ops = {
 	.ndo_open       = n2_open,
 	.ndo_stop       = n2_close,
-	.ndo_change_mtu = hdlc_change_mtu,
 	.ndo_start_xmit = hdlc_start_xmit,
 	.ndo_do_ioctl   = n2_ioctl,
 };
@@ -358,10 +357,8 @@ static int __init n2_run(unsigned long io, unsigned long irq,
 	}
 
 	card = kzalloc(sizeof(card_t), GFP_KERNEL);
-	if (card == NULL) {
-		pr_err("unable to allocate memory\n");
+	if (card == NULL)
 		return -ENOBUFS;
-	}
 
 	card->ports[0].dev = alloc_hdlcdev(&card->ports[0]);
 	card->ports[1].dev = alloc_hdlcdev(&card->ports[1]);

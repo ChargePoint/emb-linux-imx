@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * include/asm-s390/kexec.h
- *
- * (C) Copyright IBM Corp. 2005
+ * Copyright IBM Corp. 2005
  *
  * Author(s): Rolf Adelsberger <adelsberger@de.ibm.com>
  *
@@ -10,10 +9,8 @@
 #ifndef _S390_KEXEC_H
 #define _S390_KEXEC_H
 
-#ifdef __KERNEL__
-#include <asm/page.h>
-#endif
 #include <asm/processor.h>
+#include <asm/page.h>
 /*
  * KEXEC_SOURCE_MEMORY_LIMIT maximum page get_free_page can return.
  * I.e. Maximum page that is mapped directly into kernel memory,
@@ -29,6 +26,9 @@
 /* Maximum address we can use for the control pages */
 /* Not more than 2GB */
 #define KEXEC_CONTROL_MEMORY_LIMIT (1UL<<31)
+
+/* Allocate control page with GFP_DMA */
+#define KEXEC_CONTROL_MEMORY_GFP GFP_DMA
 
 /* Maximum address we can use for the crash control pages */
 #define KEXEC_CRASH_CONTROL_MEMORY_LIMIT (-1UL)

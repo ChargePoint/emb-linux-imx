@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2005-2010 Brocade Communications Systems, Inc.
+ * Copyright (c) 2005-2014 Brocade Communications Systems, Inc.
+ * Copyright (c) 2014- QLogic Corporation.
  * All rights reserved
- * www.brocade.com
+ * www.qlogic.com
  *
- * Linux driver for Brocade Fibre Channel Host Bus Adapter.
+ * Linux driver for QLogic BR-series Fibre Channel Host Bus Adapter.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License (GPL) Version 2 as
@@ -37,6 +38,7 @@ int  bfad_im_scsi_host_alloc(struct bfad_s *bfad,
 		struct bfad_im_port_s *im_port, struct device *dev);
 void bfad_im_scsi_host_free(struct bfad_s *bfad,
 				struct bfad_im_port_s *im_port);
+u32 bfad_im_supported_speeds(struct bfa_s *bfa);
 
 #define MAX_FCP_TARGET 1024
 #define MAX_FCP_LUN 16384
@@ -67,6 +69,16 @@ struct bfad_im_port_s {
 	struct fc_vport *fc_vport;
 };
 
+struct bfad_im_port_pointer {
+	struct bfad_im_port_s *p;
+};
+
+static inline struct bfad_im_port_s *bfad_get_im_port(struct Scsi_Host *host)
+{
+	struct bfad_im_port_pointer *im_portp = shost_priv(host);
+	return im_portp->p;
+}
+
 enum bfad_itnim_state {
 	ITNIM_STATE_NONE,
 	ITNIM_STATE_ONLINE,
@@ -91,6 +103,7 @@ struct bfad_itnim_s {
 	struct fc_rport *fc_rport;
 	struct bfa_itnim_s *bfa_itnim;
 	u16        scsi_tgt_id;
+	u16	   channel;
 	u16        queue_work;
 	unsigned long	last_ramp_up_time;
 	unsigned long	last_queue_full_time;
@@ -163,7 +176,33 @@ extern struct device_attribute *bfad_im_vport_attrs[];
 
 irqreturn_t bfad_intx(int irq, void *dev_id);
 
-int bfad_im_bsg_request(struct fc_bsg_job *job);
-int bfad_im_bsg_timeout(struct fc_bsg_job *job);
+int bfad_im_bsg_request(struct bsg_job *job);
+int bfad_im_bsg_timeout(struct bsg_job *job);
+
+/*
+ * Macro to set the SCSI device sdev_bflags - sdev_bflags are used by the
+ * SCSI mid-layer to choose LUN Scanning mode REPORT_LUNS vs. Sequential Scan
+ *
+ * Internally iterate's over all the ITNIM's part of the im_port & set's the
+ * sdev_bflags for the scsi_device associated with LUN #0.
+ */
+#define bfad_reset_sdev_bflags(__im_port, __lunmask_cfg) do {		\
+	struct scsi_device *__sdev = NULL;				\
+	struct bfad_itnim_s *__itnim = NULL;				\
+	u32 scan_flags = BLIST_NOREPORTLUN | BLIST_SPARSELUN;		\
+	list_for_each_entry(__itnim, &((__im_port)->itnim_mapped_list),	\
+			    list_entry) {				\
+		__sdev = scsi_device_lookup((__im_port)->shost,		\
+					    __itnim->channel,		\
+					    __itnim->scsi_tgt_id, 0);	\
+		if (__sdev) {						\
+			if ((__lunmask_cfg) == BFA_TRUE)		\
+				__sdev->sdev_bflags |= scan_flags;	\
+			else						\
+				__sdev->sdev_bflags &= ~scan_flags;	\
+			scsi_device_put(__sdev);			\
+		}							\
+	}								\
+} while (0)
 
 #endif

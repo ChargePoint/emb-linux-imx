@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __UM_PROCESSOR_H
 #define __UM_PROCESSOR_H
 
@@ -16,6 +17,18 @@
 
 #define ARCH_IS_STACKGROW(address) \
        (address + 65536 + 32 * sizeof(unsigned long) >= UPT_SP(&current->thread.regs.regs))
+
+#include <asm/user.h>
+
+/* REP NOP (PAUSE) is a good thing to insert into busy-wait loops. */
+static inline void rep_nop(void)
+{
+	__asm__ __volatile__("rep;nop": : :"memory");
+}
+
+#define cpu_relax()		rep_nop()
+
+#define task_pt_regs(t) (&(t)->thread.regs)
 
 #include <asm/processor-generic.h>
 

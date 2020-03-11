@@ -16,11 +16,6 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
- * USA
  */
 
 #include <linux/spinlock.h>
@@ -76,8 +71,8 @@ struct fintek_dev {
 	} tx;
 
 	/* Config register index/data port pair */
-	u8 cr_ip;
-	u8 cr_dp;
+	u32 cr_ip;
+	u32 cr_dp;
 
 	/* hardware I/O settings */
 	unsigned long cir_addr;
@@ -88,6 +83,7 @@ struct fintek_dev {
 	u8 chip_major;
 	u8 chip_minor;
 	u16 chip_vendor;
+	u8 logical_dev_cir;
 
 	/* hardware features */
 	bool hw_learning_capable;
@@ -172,7 +168,8 @@ struct fintek_dev {
 #define LOGICAL_DEV_ENABLE	0x01
 
 /* Logical device number of the CIR function */
-#define LOGICAL_DEV_CIR		0x05
+#define LOGICAL_DEV_CIR_REV1	0x05
+#define LOGICAL_DEV_CIR_REV2	0x08
 
 /* CIR Logical Device (LDN 0x08) config registers */
 #define CIR_CR_COMMAND_INDEX	0x04

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # link order is important here
 #
@@ -38,7 +39,6 @@ obj-$(CONFIG_BLK_DEV_AEC62XX)		+= aec62xx.o
 obj-$(CONFIG_BLK_DEV_ALI15X3)		+= alim15x3.o
 obj-$(CONFIG_BLK_DEV_AMD74XX)		+= amd74xx.o
 obj-$(CONFIG_BLK_DEV_ATIIXP)		+= atiixp.o
-obj-$(CONFIG_BLK_DEV_CELLEB)		+= scc_pata.o
 obj-$(CONFIG_BLK_DEV_CMD64X)		+= cmd64x.o
 obj-$(CONFIG_BLK_DEV_CS5520)		+= cs5520.o
 obj-$(CONFIG_BLK_DEV_CS5530)		+= cs5530.o
@@ -78,8 +78,6 @@ obj-$(CONFIG_BLK_DEV_CMD640)		+= cmd640.o
 
 obj-$(CONFIG_BLK_DEV_IDE_PMAC)		+= pmac.o
 
-obj-$(CONFIG_IDE_H8300)			+= ide-h8300.o
-
 obj-$(CONFIG_IDE_GENERIC)		+= ide-generic.o
 obj-$(CONFIG_BLK_DEV_IDEPNP)		+= ide-pnp.o
 
@@ -116,4 +114,3 @@ obj-$(CONFIG_BLK_DEV_IDE_AU1XXX)	+= au1xxx-ide.o
 
 obj-$(CONFIG_BLK_DEV_IDE_TX4938)	+= tx4938ide.o
 obj-$(CONFIG_BLK_DEV_IDE_TX4939)	+= tx4939ide.o
-obj-$(CONFIG_BLK_DEV_IDE_AT91)		+= at91_ide.o

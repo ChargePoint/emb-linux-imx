@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/arch/m32r/platforms/m32104ut/setup.c
  *
@@ -13,7 +14,6 @@
 #include <linux/init.h>
 #include <linux/device.h>
 
-#include <asm/system.h>
 #include <asm/m32r.h>
 #include <asm/io.h>
 

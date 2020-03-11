@@ -25,7 +25,6 @@
 #endif
 
 #if defined CONFIG_IA64
-#include <asm/system.h>
 #include <asm/sn/arch.h>	/* defines is_shub1() and is_shub2() */
 #define is_shub()	ia64_platform_is("sn2")
 #endif
@@ -310,6 +309,9 @@ static inline enum xp_retval
 xpc_send(short partid, int ch_number, u32 flags, void *payload,
 	 u16 payload_size)
 {
+	if (!xpc_interface.send)
+		return xpNotLoaded;
+
 	return xpc_interface.send(partid, ch_number, flags, payload,
 				  payload_size);
 }
@@ -318,6 +320,9 @@ static inline enum xp_retval
 xpc_send_notify(short partid, int ch_number, u32 flags, void *payload,
 		u16 payload_size, xpc_notify_func func, void *key)
 {
+	if (!xpc_interface.send_notify)
+		return xpNotLoaded;
+
 	return xpc_interface.send_notify(partid, ch_number, flags, payload,
 					 payload_size, func, key);
 }
@@ -325,12 +330,16 @@ xpc_send_notify(short partid, int ch_number, u32 flags, void *payload,
 static inline void
 xpc_received(short partid, int ch_number, void *payload)
 {
-	return xpc_interface.received(partid, ch_number, payload);
+	if (xpc_interface.received)
+		xpc_interface.received(partid, ch_number, payload);
 }
 
 static inline enum xp_retval
 xpc_partid_to_nasids(short partid, void *nasids)
 {
+	if (!xpc_interface.partid_to_nasids)
+		return xpNotLoaded;
+
 	return xpc_interface.partid_to_nasids(partid, nasids);
 }
 

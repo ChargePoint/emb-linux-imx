@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * gpio-au1300.h -- GPIO control for Au1300 GPIC and compatibles.
  *
@@ -10,6 +11,9 @@
 #include <asm/addrspace.h>
 #include <asm/io.h>
 #include <asm/mach-au1x00/au1000.h>
+
+struct gpio;
+struct gpio_chip;
 
 /* with the current GPIC design, up to 128 GPIOs are possible.
  * The only implementation so far is in the Au1300, which has 75 externally
@@ -127,7 +131,7 @@ static inline int au1300_gpio_getinitlvl(unsigned int gpio)
 *	A gpiochip for the 75 GPIOs is registered.
 *
 *(3) GPIOLIB=n, ALCHEMY_GPIO_INDIRECT=y:
-*	the boards' gpio.h must provide	the linux gpio wrapper functions,
+*	the boards' gpio.h must provide the linux gpio wrapper functions,
 *
 *(4) GPIOLIB=n, ALCHEMY_GPIO_INDIRECT=n:
 *	inlinable gpio functions are provided which enable access to the
@@ -137,7 +141,7 @@ static inline int au1300_gpio_getinitlvl(unsigned int gpio)
 * Cases 1 and 3 are intended for boards which want to provide their own
 * GPIO namespace and -operations (i.e. for example you have 8 GPIOs
 * which are in part provided by spare Au1300 GPIO pins and in part by
-* an external FPGA but you still want them to be accssible in linux
+* an external FPGA but you still want them to be accessible in linux
 * as gpio0-7. The board can of course use the alchemy_gpioX_* functions
 * as required).
 */
@@ -203,7 +207,22 @@ static inline int gpio_request(unsigned int gpio, const char *label)
 	return 0;
 }
 
-static inline void gpio_free(unsigned int gpio)
+static inline int gpio_request_one(unsigned gpio,
+					unsigned long flags, const char *label)
+{
+	return 0;
+}
+
+static inline int gpio_request_array(struct gpio *array, size_t num)
+{
+	return 0;
+}
+
+static inline void gpio_free(unsigned gpio)
+{
+}
+
+static inline void gpio_free_array(struct gpio *array, size_t num)
 {
 }
 

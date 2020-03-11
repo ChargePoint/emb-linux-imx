@@ -81,7 +81,7 @@ MODULE_LICENSE("GPL");
  * @regs: virtual address of GPT registers
  * @lock: spinlock to coordinate between different functions.
  * @gc: gpio_chip instance structure; used when GPIO is enabled
- * @irqhost: Pointer to irq_host instance; used when IRQ mode is supported
+ * @irqhost: Pointer to irq_domain instance; used when IRQ mode is supported
  * @wdt_mode: only relevant for gpt0: bit 0 (MPC52xx_GPT_CAN_WDT) indicates
  *   if the gpt may be used as wdt, bit 1 (MPC52xx_GPT_IS_WDT) indicates
  *   if the timer is actively used as wdt which blocks gpt functions
@@ -91,7 +91,7 @@ struct mpc52xx_gpt_priv {
 	struct device *dev;
 	struct mpc52xx_gpt __iomem *regs;
 	spinlock_t lock;
-	struct irq_host *irqhost;
+	struct irq_domain *irqhost;
 	u32 ipb_freq;
 	u8 wdt_mode;
 
@@ -191,9 +191,9 @@ static struct irq_chip mpc52xx_gpt_irq_chip = {
 	.irq_set_type = mpc52xx_gpt_irq_set_type,
 };
 
-void mpc52xx_gpt_irq_cascade(unsigned int virq, struct irq_desc *desc)
+static void mpc52xx_gpt_irq_cascade(struct irq_desc *desc)
 {
-	struct mpc52xx_gpt_priv *gpt = irq_get_handler_data(virq);
+	struct mpc52xx_gpt_priv *gpt = irq_desc_get_handler_data(desc);
 	int sub_virq;
 	u32 status;
 
@@ -204,7 +204,7 @@ void mpc52xx_gpt_irq_cascade(unsigned int virq, struct irq_desc *desc)
 	}
 }
 
-static int mpc52xx_gpt_irq_map(struct irq_host *h, unsigned int virq,
+static int mpc52xx_gpt_irq_map(struct irq_domain *h, unsigned int virq,
 			       irq_hw_number_t hw)
 {
 	struct mpc52xx_gpt_priv *gpt = h->host_data;
@@ -216,7 +216,7 @@ static int mpc52xx_gpt_irq_map(struct irq_host *h, unsigned int virq,
 	return 0;
 }
 
-static int mpc52xx_gpt_irq_xlate(struct irq_host *h, struct device_node *ct,
+static int mpc52xx_gpt_irq_xlate(struct irq_domain *h, struct device_node *ct,
 				 const u32 *intspec, unsigned int intsize,
 				 irq_hw_number_t *out_hwirq,
 				 unsigned int *out_flags)
@@ -226,7 +226,7 @@ static int mpc52xx_gpt_irq_xlate(struct irq_host *h, struct device_node *ct,
 	dev_dbg(gpt->dev, "%s: flags=%i\n", __func__, intspec[0]);
 
 	if ((intsize < 1) || (intspec[0] > 3)) {
-		dev_err(gpt->dev, "bad irq specifier in %s\n", ct->full_name);
+		dev_err(gpt->dev, "bad irq specifier in %pOF\n", ct);
 		return -EINVAL;
 	}
 
@@ -236,7 +236,7 @@ static int mpc52xx_gpt_irq_xlate(struct irq_host *h, struct device_node *ct,
 	return 0;
 }
 
-static struct irq_host_ops mpc52xx_gpt_irq_ops = {
+static const struct irq_domain_ops mpc52xx_gpt_irq_ops = {
 	.map = mpc52xx_gpt_irq_map,
 	.xlate = mpc52xx_gpt_irq_xlate,
 };
@@ -252,14 +252,12 @@ mpc52xx_gpt_irq_setup(struct mpc52xx_gpt_priv *gpt, struct device_node *node)
 	if (!cascade_virq)
 		return;
 
-	gpt->irqhost = irq_alloc_host(node, IRQ_HOST_MAP_LINEAR, 1,
-				      &mpc52xx_gpt_irq_ops, -1);
+	gpt->irqhost = irq_domain_add_linear(node, 1, &mpc52xx_gpt_irq_ops, gpt);
 	if (!gpt->irqhost) {
-		dev_err(gpt->dev, "irq_alloc_host() failed\n");
+		dev_err(gpt->dev, "irq_domain_add_linear() failed\n");
 		return;
 	}
 
-	gpt->irqhost->host_data = gpt;
 	irq_set_handler_data(cascade_virq, gpt);
 	irq_set_chained_handler(cascade_virq, mpc52xx_gpt_irq_cascade);
 
@@ -280,14 +278,9 @@ mpc52xx_gpt_irq_setup(struct mpc52xx_gpt_priv *gpt, struct device_node *node)
  * GPIOLIB hooks
  */
 #if defined(CONFIG_GPIOLIB)
-static inline struct mpc52xx_gpt_priv *gc_to_mpc52xx_gpt(struct gpio_chip *gc)
-{
-	return container_of(gc, struct mpc52xx_gpt_priv, gc);
-}
-
 static int mpc52xx_gpt_gpio_get(struct gpio_chip *gc, unsigned int gpio)
 {
-	struct mpc52xx_gpt_priv *gpt = gc_to_mpc52xx_gpt(gc);
+	struct mpc52xx_gpt_priv *gpt = gpiochip_get_data(gc);
 
 	return (in_be32(&gpt->regs->status) >> 8) & 1;
 }
@@ -295,7 +288,7 @@ static int mpc52xx_gpt_gpio_get(struct gpio_chip *gc, unsigned int gpio)
 static void
 mpc52xx_gpt_gpio_set(struct gpio_chip *gc, unsigned int gpio, int v)
 {
-	struct mpc52xx_gpt_priv *gpt = gc_to_mpc52xx_gpt(gc);
+	struct mpc52xx_gpt_priv *gpt = gpiochip_get_data(gc);
 	unsigned long flags;
 	u32 r;
 
@@ -309,7 +302,7 @@ mpc52xx_gpt_gpio_set(struct gpio_chip *gc, unsigned int gpio, int v)
 
 static int mpc52xx_gpt_gpio_dir_in(struct gpio_chip *gc, unsigned int gpio)
 {
-	struct mpc52xx_gpt_priv *gpt = gc_to_mpc52xx_gpt(gc);
+	struct mpc52xx_gpt_priv *gpt = gpiochip_get_data(gc);
 	unsigned long flags;
 
 	dev_dbg(gpt->dev, "%s: gpio:%d\n", __func__, gpio);
@@ -338,7 +331,7 @@ mpc52xx_gpt_gpio_setup(struct mpc52xx_gpt_priv *gpt, struct device_node *node)
 	if (!of_find_property(node, "gpio-controller", NULL))
 		return;
 
-	gpt->gc.label = kstrdup(node->full_name, GFP_KERNEL);
+	gpt->gc.label = kasprintf(GFP_KERNEL, "%pOF", node);
 	if (!gpt->gc.label) {
 		dev_err(gpt->dev, "out of memory\n");
 		return;
@@ -356,9 +349,9 @@ mpc52xx_gpt_gpio_setup(struct mpc52xx_gpt_priv *gpt, struct device_node *node)
 	clrsetbits_be32(&gpt->regs->mode, MPC52xx_GPT_MODE_MS_MASK,
 			MPC52xx_GPT_MODE_MS_GPIO);
 
-	rc = gpiochip_add(&gpt->gc);
+	rc = gpiochip_add_data(&gpt->gc, gpt);
 	if (rc)
-		dev_err(gpt->dev, "gpiochip_add() failed; rc=%i\n", rc);
+		dev_err(gpt->dev, "gpiochip_add_data() failed; rc=%i\n", rc);
 
 	dev_dbg(gpt->dev, "%s() complete.\n", __func__);
 }
@@ -528,7 +521,7 @@ EXPORT_SYMBOL(mpc52xx_gpt_timer_period);
 
 #define WDT_IDENTITY	    "mpc52xx watchdog on GPT0"
 
-/* wdt_is_active stores wether or not the /dev/watchdog device is opened */
+/* wdt_is_active stores whether or not the /dev/watchdog device is opened */
 static unsigned long wdt_is_active;
 
 /* wdt-capable gpt */
@@ -671,7 +664,7 @@ static struct miscdevice mpc52xx_wdt_miscdev = {
 	.fops		= &mpc52xx_wdt_fops,
 };
 
-static int __devinit mpc52xx_gpt_wdt_init(void)
+static int mpc52xx_gpt_wdt_init(void)
 {
 	int err;
 
@@ -706,7 +699,7 @@ static int mpc52xx_gpt_wdt_setup(struct mpc52xx_gpt_priv *gpt,
 
 #else
 
-static int __devinit mpc52xx_gpt_wdt_init(void)
+static int mpc52xx_gpt_wdt_init(void)
 {
 	return 0;
 }
@@ -722,11 +715,11 @@ static inline int mpc52xx_gpt_wdt_setup(struct mpc52xx_gpt_priv *gpt,
 /* ---------------------------------------------------------------------
  * of_platform bus binding code
  */
-static int __devinit mpc52xx_gpt_probe(struct platform_device *ofdev)
+static int mpc52xx_gpt_probe(struct platform_device *ofdev)
 {
 	struct mpc52xx_gpt_priv *gpt;
 
-	gpt = kzalloc(sizeof *gpt, GFP_KERNEL);
+	gpt = devm_kzalloc(&ofdev->dev, sizeof *gpt, GFP_KERNEL);
 	if (!gpt)
 		return -ENOMEM;
 
@@ -734,10 +727,8 @@ static int __devinit mpc52xx_gpt_probe(struct platform_device *ofdev)
 	gpt->dev = &ofdev->dev;
 	gpt->ipb_freq = mpc5xxx_get_bus_frequency(ofdev->dev.of_node);
 	gpt->regs = of_iomap(ofdev->dev.of_node, 0);
-	if (!gpt->regs) {
-		kfree(gpt);
+	if (!gpt->regs)
 		return -ENOMEM;
-	}
 
 	dev_set_drvdata(&ofdev->dev, gpt);
 
@@ -784,7 +775,6 @@ static const struct of_device_id mpc52xx_gpt_match[] = {
 static struct platform_driver mpc52xx_gpt_driver = {
 	.driver = {
 		.name = "mpc52xx-gpt",
-		.owner = THIS_MODULE,
 		.of_match_table = mpc52xx_gpt_match,
 	},
 	.probe = mpc52xx_gpt_probe,

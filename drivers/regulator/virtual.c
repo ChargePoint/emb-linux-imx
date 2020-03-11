@@ -15,8 +15,11 @@
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
+#include <linux/regulator/of_regulator.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/of.h>
+
 
 struct virtual_consumer_data {
 	struct mutex lock;
@@ -121,7 +124,7 @@ static ssize_t set_min_uV(struct device *dev, struct device_attribute *attr,
 	struct virtual_consumer_data *data = dev_get_drvdata(dev);
 	long val;
 
-	if (strict_strtol(buf, 10, &val) != 0)
+	if (kstrtol(buf, 10, &val) != 0)
 		return count;
 
 	mutex_lock(&data->lock);
@@ -147,7 +150,7 @@ static ssize_t set_max_uV(struct device *dev, struct device_attribute *attr,
 	struct virtual_consumer_data *data = dev_get_drvdata(dev);
 	long val;
 
-	if (strict_strtol(buf, 10, &val) != 0)
+	if (kstrtol(buf, 10, &val) != 0)
 		return count;
 
 	mutex_lock(&data->lock);
@@ -173,7 +176,7 @@ static ssize_t set_min_uA(struct device *dev, struct device_attribute *attr,
 	struct virtual_consumer_data *data = dev_get_drvdata(dev);
 	long val;
 
-	if (strict_strtol(buf, 10, &val) != 0)
+	if (kstrtol(buf, 10, &val) != 0)
 		return count;
 
 	mutex_lock(&data->lock);
@@ -199,7 +202,7 @@ static ssize_t set_max_uA(struct device *dev, struct device_attribute *attr,
 	struct virtual_consumer_data *data = dev_get_drvdata(dev);
 	long val;
 
-	if (strict_strtol(buf, 10, &val) != 0)
+	if (kstrtol(buf, 10, &val) != 0)
 		return count;
 
 	mutex_lock(&data->lock);
@@ -266,11 +269,11 @@ static ssize_t set_mode(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
-static DEVICE_ATTR(min_microvolts, 0666, show_min_uV, set_min_uV);
-static DEVICE_ATTR(max_microvolts, 0666, show_max_uV, set_max_uV);
-static DEVICE_ATTR(min_microamps, 0666, show_min_uA, set_min_uA);
-static DEVICE_ATTR(max_microamps, 0666, show_max_uA, set_max_uA);
-static DEVICE_ATTR(mode, 0666, show_mode, set_mode);
+static DEVICE_ATTR(min_microvolts, 0664, show_min_uV, set_min_uV);
+static DEVICE_ATTR(max_microvolts, 0664, show_max_uV, set_max_uV);
+static DEVICE_ATTR(min_microamps, 0664, show_min_uA, set_min_uA);
+static DEVICE_ATTR(max_microamps, 0664, show_max_uA, set_max_uA);
+static DEVICE_ATTR(mode, 0664, show_mode, set_mode);
 
 static struct attribute *regulator_virtual_attributes[] = {
 	&dev_attr_min_microvolts.attr,
@@ -285,24 +288,47 @@ static const struct attribute_group regulator_virtual_attr_group = {
 	.attrs	= regulator_virtual_attributes,
 };
 
-static int __devinit regulator_virtual_probe(struct platform_device *pdev)
+static const char *of_get_virt_regulator_config(struct device *dev, struct device_node *np)
 {
-	char *reg_id = pdev->dev.platform_data;
+	const char *reg_id;
+	int r;
+
+	r = of_property_read_string(np, "virtual-supply", &reg_id);
+	if (r) {
+		return NULL;
+	}
+	return reg_id;
+}
+
+static int regulator_virtual_probe(struct platform_device *pdev)
+{
+	char *reg_id = dev_get_platdata(&pdev->dev);
+	struct device_node *np = pdev->dev.of_node;
 	struct virtual_consumer_data *drvdata;
 	int ret;
 
-	drvdata = kzalloc(sizeof(struct virtual_consumer_data), GFP_KERNEL);
+	drvdata = devm_kzalloc(&pdev->dev, sizeof(struct virtual_consumer_data),
+			       GFP_KERNEL);
 	if (drvdata == NULL)
 		return -ENOMEM;
 
+	if (np) {
+		reg_id = (char *)of_get_virt_regulator_config(&pdev->dev, np);
+	}
+
+	if (reg_id == NULL) {
+		dev_err(&pdev->dev, "Fail to get reg_id");
+		return -EINVAL;
+	}
+
 	mutex_init(&drvdata->lock);
 
-	drvdata->regulator = regulator_get(&pdev->dev, reg_id);
+	drvdata->regulator = devm_regulator_get(&pdev->dev, reg_id);
 	if (IS_ERR(drvdata->regulator)) {
 		ret = PTR_ERR(drvdata->regulator);
 		dev_err(&pdev->dev, "Failed to obtain supply '%s': %d\n",
 			reg_id, ret);
-		goto err;
+		return ret;
 	}
 
 	ret = sysfs_create_group(&pdev->dev.kobj,
@@ -310,23 +336,19 @@ static int __devinit regulator_virtual_probe(struct platform_device *pdev)
 	if (ret != 0) {
 		dev_err(&pdev->dev,
 			"Failed to create attribute group: %d\n", ret);
-		goto err_regulator;
+		return ret;
 	}
 
 	drvdata->mode = regulator_get_mode(drvdata->regulator);
 
 	platform_set_drvdata(pdev, drvdata);
 
-	return 0;
+	dev_info(&pdev->dev, "attached: %s\n", reg_id);
 
-err_regulator:
-	regulator_put(drvdata->regulator);
-err:
-	kfree(drvdata);
-	return ret;
+	return 0;
 }
 
-static int __devexit regulator_virtual_remove(struct platform_device *pdev)
+static int regulator_virtual_remove(struct platform_device *pdev)
 {
 	struct virtual_consumer_data *drvdata = platform_get_drvdata(pdev);
 
@@ -334,21 +356,26 @@ static int __devexit regulator_virtual_remove(struct platform_device *pdev)
 
 	if (drvdata->enabled)
 		regulator_disable(drvdata->regulator);
-	regulator_put(drvdata->regulator);
-
-	kfree(drvdata);
 
 	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
 
+#if defined(CONFIG_OF)
+static const struct of_device_id regulator_virtual_of_match[] = {
+	{ .compatible = "regulator-virtual", },
+	{},
+};
+#endif
+
 static struct platform_driver regulator_virtual_consumer_driver = {
 	.probe		= regulator_virtual_probe,
-	.remove		= __devexit_p(regulator_virtual_remove),
+	.remove		= regulator_virtual_remove,
 	.driver		= {
 		.name		= "reg-virt-consumer",
 		.owner		= THIS_MODULE,
+		.of_match_table = of_match_ptr(regulator_virtual_of_match),
 	},
 };
 

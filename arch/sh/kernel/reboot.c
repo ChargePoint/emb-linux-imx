@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/pm.h>
 #include <linux/kexec.h>
 #include <linux/kernel.h>
@@ -8,8 +9,8 @@
 #endif
 #include <asm/addrspace.h>
 #include <asm/reboot.h>
-#include <asm/system.h>
 #include <asm/tlbflush.h>
+#include <asm/traps.h>
 
 void (*pm_power_off)(void);
 EXPORT_SYMBOL(pm_power_off);

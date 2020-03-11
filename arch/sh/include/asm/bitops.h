@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __ASM_SH_BITOPS_H
 #define __ASM_SH_BITOPS_H
 
@@ -7,9 +8,9 @@
 #error only <linux/bitops.h> can be included directly
 #endif
 
-#include <asm/system.h>
 /* For __swab32 */
 #include <asm/byteorder.h>
+#include <asm/barrier.h>
 
 #ifdef CONFIG_GUSA_RB
 #include <asm/bitops-grb.h>
@@ -18,16 +19,12 @@
 #include <asm/bitops-op32.h>
 #elif defined(CONFIG_CPU_SH4A)
 #include <asm/bitops-llsc.h>
+#elif defined(CONFIG_CPU_J2) && defined(CONFIG_SMP)
+#include <asm/bitops-cas.h>
 #else
 #include <asm-generic/bitops/atomic.h>
 #include <asm-generic/bitops/non-atomic.h>
 #endif
-
-/*
- * clear_bit() doesn't provide any barrier for the compiler.
- */
-#define smp_mb__before_clear_bit()	smp_mb()
-#define smp_mb__after_clear_bit()	smp_mb()
 
 #ifdef CONFIG_SUPERH32
 static inline unsigned long ffz(unsigned long word)

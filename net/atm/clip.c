@@ -37,7 +37,6 @@
 #include <linux/param.h> /* for HZ */
 #include <linux/uaccess.h>
 #include <asm/byteorder.h> /* for htons etc. */
-#include <asm/system.h> /* save/restore_flags */
 #include <linux/atomic.h>
 
 #include "common.h"
@@ -46,8 +45,8 @@
 
 static struct net_device *clip_devs;
 static struct atm_vcc *atmarpd;
-static struct neigh_table clip_tbl;
 static struct timer_list idle_timer;
+static const struct neigh_ops clip_neigh_ops;
 
 static int to_atmarpd(enum atmarp_ctrl_type type, int itf, __be32 ip)
 {
@@ -61,7 +60,7 @@ static int to_atmarpd(enum atmarp_ctrl_type type, int itf, __be32 ip)
 	skb = alloc_skb(sizeof(struct atmarp_ctrl), GFP_ATOMIC);
 	if (!skb)
 		return -ENOMEM;
-	ctrl = (struct atmarp_ctrl *)skb_put(skb, sizeof(struct atmarp_ctrl));
+	ctrl = skb_put(skb, sizeof(struct atmarp_ctrl));
 	ctrl->type = type;
 	ctrl->itf_num = itf;
 	ctrl->ip = ip;
@@ -69,7 +68,7 @@ static int to_atmarpd(enum atmarp_ctrl_type type, int itf, __be32 ip)
 
 	sk = sk_atm(atmarpd);
 	skb_queue_tail(&sk->sk_receive_queue, skb);
-	sk->sk_data_ready(sk, skb->len);
+	sk->sk_data_ready(sk);
 	return 0;
 }
 
@@ -107,7 +106,7 @@ static void unlink_clip_vcc(struct clip_vcc *clip_vcc)
 			entry->expires = jiffies - 1;
 			/* force resolution or expiration */
 			error = neigh_update(entry->neigh, NULL, NUD_NONE,
-					     NEIGH_UPDATE_F_ADMIN);
+					     NEIGH_UPDATE_F_ADMIN, 0);
 			if (error)
 				pr_crit("neigh_update failed with %d\n", error);
 			goto out;
@@ -123,6 +122,8 @@ static int neigh_check_cb(struct neighbour *n)
 	struct atmarp_entry *entry = neighbour_priv(n);
 	struct clip_vcc *cv;
 
+	if (n->ops != &clip_neigh_ops)
+		return 0;
 	for (cv = entry->vccs; cv; cv = cv->next) {
 		unsigned long exp = cv->last_use + cv->idle_timeout;
 
@@ -136,11 +137,11 @@ static int neigh_check_cb(struct neighbour *n)
 	if (entry->vccs || time_before(jiffies, entry->expires))
 		return 0;
 
-	if (atomic_read(&n->refcnt) > 1) {
+	if (refcount_read(&n->refcnt) > 1) {
 		struct sk_buff *skb;
 
 		pr_debug("destruction postponed with ref %d\n",
-			 atomic_read(&n->refcnt));
+			 refcount_read(&n->refcnt));
 
 		while ((skb = skb_dequeue(&n->arp_queue)) != NULL)
 			dev_kfree_skb(skb);
@@ -154,10 +155,10 @@ static int neigh_check_cb(struct neighbour *n)
 
 static void idle_timer_check(unsigned long dummy)
 {
-	write_lock(&clip_tbl.lock);
-	__neigh_for_each_release(&clip_tbl, neigh_check_cb);
+	write_lock(&arp_tbl.lock);
+	__neigh_for_each_release(&arp_tbl, neigh_check_cb);
 	mod_timer(&idle_timer, jiffies + CLIP_CHECK_INTERVAL * HZ);
-	write_unlock(&clip_tbl.lock);
+	write_unlock(&arp_tbl.lock);
 }
 
 static int clip_arp_rcv(struct sk_buff *skb)
@@ -285,7 +286,7 @@ static const struct neigh_ops clip_neigh_ops = {
 	.connected_output =	neigh_direct_output,
 };
 
-static int clip_constructor(struct neighbour *neigh)
+static int clip_constructor(struct net_device *dev, struct neighbour *neigh)
 {
 	struct atmarp_entry *entry = neighbour_priv(neigh);
 
@@ -316,6 +317,9 @@ static int clip_constructor(struct neighbour *neigh)
 
 static int clip_encap(struct atm_vcc *vcc, int mode)
 {
+	if (!CLIP_VCC(vcc))
+		return -EBADFD;
+
 	CLIP_VCC(vcc)->encap = mode;
 	return 0;
 }
@@ -328,6 +332,8 @@ static netdev_tx_t clip_start_xmit(struct sk_buff *skb,
 	struct atmarp_entry *entry;
 	struct neighbour *n;
 	struct atm_vcc *vcc;
+	struct rtable *rt;
+	__be32 *daddr;
 	int old;
 	unsigned long flags;
 
@@ -338,7 +344,12 @@ static netdev_tx_t clip_start_xmit(struct sk_buff *skb,
 		dev->stats.tx_dropped++;
 		return NETDEV_TX_OK;
 	}
-	n = dst_get_neighbour_noref(dst);
+	rt = (struct rtable *) dst;
+	if (rt->rt_gateway)
+		daddr = &rt->rt_gateway;
+	else
+		daddr = &ip_hdr(skb)->daddr;
+	n = dst_neigh_lookup(dst, daddr);
 	if (!n) {
 		pr_err("NO NEIGHBOUR !\n");
 		dev_kfree_skb(skb);
@@ -358,7 +369,7 @@ static netdev_tx_t clip_start_xmit(struct sk_buff *skb,
 			dev_kfree_skb(skb);
 			dev->stats.tx_dropped++;
 		}
-		return NETDEV_TX_OK;
+		goto out_release_neigh;
 	}
 	pr_debug("neigh %p, vccs %p\n", entry, entry->vccs);
 	ATM_SKB(skb)->vcc = vcc = entry->vccs->vcc;
@@ -370,21 +381,20 @@ static netdev_tx_t clip_start_xmit(struct sk_buff *skb,
 		memcpy(here, llc_oui, sizeof(llc_oui));
 		((__be16 *) here)[3] = skb->protocol;
 	}
-	atomic_add(skb->truesize, &sk_atm(vcc)->sk_wmem_alloc);
-	ATM_SKB(skb)->atm_options = vcc->atm_options;
+	atm_account_tx(vcc, skb);
 	entry->vccs->last_use = jiffies;
 	pr_debug("atm_skb(%p)->vcc(%p)->dev(%p)\n", skb, vcc, vcc->dev);
 	old = xchg(&entry->vccs->xoff, 1);	/* assume XOFF ... */
 	if (old) {
-		pr_warning("XOFF->XOFF transition\n");
-		return NETDEV_TX_OK;
+		pr_warn("XOFF->XOFF transition\n");
+		goto out_release_neigh;
 	}
 	dev->stats.tx_packets++;
 	dev->stats.tx_bytes += skb->len;
 	vcc->send(vcc, skb);
 	if (atm_may_send(vcc, 0)) {
 		entry->vccs->xoff = 0;
-		return NETDEV_TX_OK;
+		goto out_release_neigh;
 	}
 	spin_lock_irqsave(&clip_priv->xoff_lock, flags);
 	netif_stop_queue(dev);	/* XOFF -> throttle immediately */
@@ -396,6 +406,8 @@ static netdev_tx_t clip_start_xmit(struct sk_buff *skb,
 	   of the brief netif_stop_queue. If this isn't true or if it
 	   changes, use netif_wake_queue instead. */
 	spin_unlock_irqrestore(&clip_priv->xoff_lock, flags);
+out_release_neigh:
+	neigh_release(n);
 	return NETDEV_TX_OK;
 }
 
@@ -437,7 +449,7 @@ static int clip_setentry(struct atm_vcc *vcc, __be32 ip)
 	struct rtable *rt;
 
 	if (vcc->push != clip_push) {
-		pr_warning("non-CLIP VCC\n");
+		pr_warn("non-CLIP VCC\n");
 		return -EBADF;
 	}
 	clip_vcc = CLIP_VCC(vcc);
@@ -468,7 +480,7 @@ static int clip_setentry(struct atm_vcc *vcc, __be32 ip)
 		link_vcc(clip_vcc, entry);
 	}
 	error = neigh_update(neigh, llc_oui, NUD_PERMANENT,
-			     NEIGH_UPDATE_F_OVERRIDE | NEIGH_UPDATE_F_ADMIN);
+			     NEIGH_UPDATE_F_OVERRIDE | NEIGH_UPDATE_F_ADMIN, 0);
 	neigh_release(neigh);
 	return error;
 }
@@ -491,7 +503,7 @@ static void clip_setup(struct net_device *dev)
 	/* without any more elaborate queuing. 100 is a reasonable */
 	/* compromise between decent burst-tolerance and protection */
 	/* against memory hogs. */
-	dev->priv_flags &= ~IFF_XMIT_DST_RELEASE;
+	netif_keep_dst(dev);
 }
 
 static int clip_create(int number)
@@ -510,7 +522,8 @@ static int clip_create(int number)
 			if (PRIV(dev)->number >= number)
 				number = PRIV(dev)->number + 1;
 	}
-	dev = alloc_netdev(sizeof(struct clip_priv), "", clip_setup);
+	dev = alloc_netdev(sizeof(struct clip_priv), "", NET_NAME_UNKNOWN,
+			   clip_setup);
 	if (!dev)
 		return -ENOMEM;
 	clip_priv = PRIV(dev);
@@ -529,9 +542,9 @@ static int clip_create(int number)
 }
 
 static int clip_device_event(struct notifier_block *this, unsigned long event,
-			     void *arg)
+			     void *ptr)
 {
-	struct net_device *dev = arg;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 
 	if (!net_eq(dev_net(dev), &init_net))
 		return NOTIFY_DONE;
@@ -565,6 +578,7 @@ static int clip_inet_event(struct notifier_block *this, unsigned long event,
 			   void *ifa)
 {
 	struct in_device *in_dev;
+	struct netdev_notifier_info info;
 
 	in_dev = ((struct in_ifaddr *)ifa)->ifa_dev;
 	/*
@@ -573,7 +587,8 @@ static int clip_inet_event(struct notifier_block *this, unsigned long event,
 	 */
 	if (event != NETDEV_UP)
 		return NOTIFY_DONE;
-	return clip_device_event(this, NETDEV_CHANGE, in_dev->dev);
+	netdev_notifier_info_init(&info, in_dev->dev);
+	return clip_device_event(this, NETDEV_CHANGE, &info);
 }
 
 static struct notifier_block clip_dev_notifier = {
@@ -601,7 +616,7 @@ static void atmarpd_close(struct atm_vcc *vcc)
 	module_put(THIS_MODULE);
 }
 
-static struct atmdev_ops atmarpd_dev_ops = {
+static const struct atmdev_ops atmarpd_dev_ops = {
 	.close = atmarpd_close
 };
 
@@ -751,7 +766,7 @@ static void atmarp_info(struct seq_file *seq, struct neighbour *n,
 			seq_printf(seq, "(resolving)\n");
 		else
 			seq_printf(seq, "(expired, ref %d)\n",
-				   atomic_read(&entry->neigh->refcnt));
+				   refcount_read(&entry->neigh->refcnt));
 	} else if (!svc) {
 		seq_printf(seq, "%d.%d.%d\n",
 			   clip_vcc->vcc->dev->number,

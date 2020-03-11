@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Device driver for the PMU on 68K-based Apple PowerBooks
  *
@@ -37,9 +38,8 @@
 #include <asm/mac_via.h>
 
 #include <asm/pgtable.h>
-#include <asm/system.h>
 #include <asm/irq.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 /* Misc minor number allocated for /dev/pmu */
 #define PMU_MINOR	154

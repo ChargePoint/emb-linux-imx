@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * linux/fs/ext2/ioctl.c
  *
@@ -14,12 +15,12 @@
 #include <linux/compat.h>
 #include <linux/mount.h>
 #include <asm/current.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 
 long ext2_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	struct inode *inode = filp->f_dentry->d_inode;
+	struct inode *inode = file_inode(filp);
 	struct ext2_inode_info *ei = EXT2_I(inode);
 	unsigned int flags;
 	unsigned short rsv_window_size;
@@ -29,7 +30,6 @@ long ext2_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case EXT2_IOC_GETFLAGS:
-		ext2_get_inode_flags(ei);
 		flags = ei->i_flags & EXT2_FL_USER_VISIBLE;
 		return put_user(flags, (int __user *) arg);
 	case EXT2_IOC_SETFLAGS: {
@@ -51,10 +51,10 @@ long ext2_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		flags = ext2_mask_flags(inode->i_mode, flags);
 
-		mutex_lock(&inode->i_mutex);
+		inode_lock(inode);
 		/* Is it quota file? Do not allow user to mess with it */
 		if (IS_NOQUOTA(inode)) {
-			mutex_unlock(&inode->i_mutex);
+			inode_unlock(inode);
 			ret = -EPERM;
 			goto setflags_out;
 		}
@@ -68,7 +68,7 @@ long ext2_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		 */
 		if ((flags ^ oldflags) & (EXT2_APPEND_FL | EXT2_IMMUTABLE_FL)) {
 			if (!capable(CAP_LINUX_IMMUTABLE)) {
-				mutex_unlock(&inode->i_mutex);
+				inode_unlock(inode);
 				ret = -EPERM;
 				goto setflags_out;
 			}
@@ -77,10 +77,11 @@ long ext2_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		flags = flags & EXT2_FL_USER_MODIFIABLE;
 		flags |= oldflags & ~EXT2_FL_USER_MODIFIABLE;
 		ei->i_flags = flags;
-		mutex_unlock(&inode->i_mutex);
 
 		ext2_set_inode_flags(inode);
-		inode->i_ctime = CURRENT_TIME_SEC;
+		inode->i_ctime = current_time(inode);
+		inode_unlock(inode);
+
 		mark_inode_dirty(inode);
 setflags_out:
 		mnt_drop_write_file(filp);
@@ -88,20 +89,29 @@ setflags_out:
 	}
 	case EXT2_IOC_GETVERSION:
 		return put_user(inode->i_generation, (int __user *) arg);
-	case EXT2_IOC_SETVERSION:
+	case EXT2_IOC_SETVERSION: {
+		__u32 generation;
+
 		if (!inode_owner_or_capable(inode))
 			return -EPERM;
 		ret = mnt_want_write_file(filp);
 		if (ret)
 			return ret;
-		if (get_user(inode->i_generation, (int __user *) arg)) {
+		if (get_user(generation, (int __user *) arg)) {
 			ret = -EFAULT;
-		} else {
-			inode->i_ctime = CURRENT_TIME_SEC;
-			mark_inode_dirty(inode);
+			goto setversion_out;
 		}
+
+		inode_lock(inode);
+		inode->i_ctime = current_time(inode);
+		inode->i_generation = generation;
+		inode_unlock(inode);
+
+		mark_inode_dirty(inode);
+setversion_out:
 		mnt_drop_write_file(filp);
 		return ret;
+	}
 	case EXT2_IOC_GETRSVSZ:
 		if (test_opt(inode->i_sb, RESERVATION)
 			&& S_ISREG(inode->i_mode)

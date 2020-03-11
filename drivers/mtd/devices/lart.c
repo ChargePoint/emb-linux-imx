@@ -75,18 +75,18 @@ static char module_name[] = "lart";
 
 /* blob */
 #define NUM_BLOB_BLOCKS		FLASH_NUMBLOCKS_16m_PARAM
-#define BLOB_START			0x00000000
-#define BLOB_LEN			(NUM_BLOB_BLOCKS * FLASH_BLOCKSIZE_PARAM)
+#define PART_BLOB_START		0x00000000
+#define PART_BLOB_LEN		(NUM_BLOB_BLOCKS * FLASH_BLOCKSIZE_PARAM)
 
 /* kernel */
 #define NUM_KERNEL_BLOCKS	7
-#define KERNEL_START		(BLOB_START + BLOB_LEN)
-#define KERNEL_LEN			(NUM_KERNEL_BLOCKS * FLASH_BLOCKSIZE_MAIN)
+#define PART_KERNEL_START	(PART_BLOB_START + PART_BLOB_LEN)
+#define PART_KERNEL_LEN		(NUM_KERNEL_BLOCKS * FLASH_BLOCKSIZE_MAIN)
 
 /* initial ramdisk */
 #define NUM_INITRD_BLOCKS	24
-#define INITRD_START		(KERNEL_START + KERNEL_LEN)
-#define INITRD_LEN			(NUM_INITRD_BLOCKS * FLASH_BLOCKSIZE_MAIN)
+#define PART_INITRD_START	(PART_KERNEL_START + PART_KERNEL_LEN)
+#define PART_INITRD_LEN		(NUM_INITRD_BLOCKS * FLASH_BLOCKSIZE_MAIN)
 
 /*
  * See section 4.0 in "3 Volt Fast Boot Block Flash Memory" Intel Datasheet
@@ -367,9 +367,6 @@ static int flash_erase (struct mtd_info *mtd,struct erase_info *instr)
    printk (KERN_DEBUG "%s(addr = 0x%.8x, len = %d)\n", __func__, instr->addr, instr->len);
 #endif
 
-   /* sanity checks */
-   if (instr->addr + instr->len > mtd->size) return (-EINVAL);
-
    /*
 	* check that both start and end of the requested erase are
 	* aligned with the erasesize at the appropriate addresses.
@@ -439,10 +436,6 @@ static int flash_read (struct mtd_info *mtd,loff_t from,size_t len,size_t *retle
 #ifdef LART_DEBUG
    printk (KERN_DEBUG "%s(from = 0x%.8x, len = %d)\n", __func__, (__u32)from, len);
 #endif
-
-   /* sanity checks */
-   if (!len) return (0);
-   if (from + len > mtd->size) return (-EINVAL);
 
    /* we always read len bytes */
    *retlen = len;
@@ -522,11 +515,8 @@ static int flash_write (struct mtd_info *mtd,loff_t to,size_t len,size_t *retlen
    printk (KERN_DEBUG "%s(to = 0x%.8x, len = %d)\n", __func__, (__u32)to, len);
 #endif
 
-   *retlen = 0;
-
    /* sanity checks */
    if (!len) return (0);
-   if (to + len > mtd->size) return (-EINVAL);
 
    /* first, we write a 0xFF.... padded byte until we reach a dword boundary */
    if (to & (BUSWIDTH - 1))
@@ -597,20 +587,20 @@ static struct mtd_partition lart_partitions[] = {
 	/* blob */
 	{
 		.name	= "blob",
-		.offset	= BLOB_START,
-		.size	= BLOB_LEN,
+		.offset	= PART_BLOB_START,
+		.size	= PART_BLOB_LEN,
 	},
 	/* kernel */
 	{
 		.name	= "kernel",
-		.offset	= KERNEL_START,		/* MTDPART_OFS_APPEND */
-		.size	= KERNEL_LEN,
+		.offset	= PART_KERNEL_START,	/* MTDPART_OFS_APPEND */
+		.size	= PART_KERNEL_LEN,
 	},
 	/* initial ramdisk / file system */
 	{
 		.name	= "file system",
-		.offset	= INITRD_START,		/* MTDPART_OFS_APPEND */
-		.size	= INITRD_LEN,		/* MTDPART_SIZ_FULL */
+		.offset	= PART_INITRD_START,	/* MTDPART_OFS_APPEND */
+		.size	= PART_INITRD_LEN,	/* MTDPART_SIZ_FULL */
 	}
 };
 #define NUM_PARTITIONS ARRAY_SIZE(lart_partitions)
@@ -630,14 +620,15 @@ static int __init lart_flash_init (void)
    mtd.name = module_name;
    mtd.type = MTD_NORFLASH;
    mtd.writesize = 1;
+   mtd.writebufsize = 4;
    mtd.flags = MTD_CAP_NORFLASH;
    mtd.size = FLASH_BLOCKSIZE_PARAM * FLASH_NUMBLOCKS_16m_PARAM + FLASH_BLOCKSIZE_MAIN * FLASH_NUMBLOCKS_16m_MAIN;
    mtd.erasesize = FLASH_BLOCKSIZE_MAIN;
    mtd.numeraseregions = ARRAY_SIZE(erase_regions);
    mtd.eraseregions = erase_regions;
-   mtd.erase = flash_erase;
-   mtd.read = flash_read;
-   mtd.write = flash_write;
+   mtd._erase = flash_erase;
+   mtd._read = flash_read;
+   mtd._write = flash_write;
    mtd.owner = THIS_MODULE;
 
 #ifdef LART_DEBUG

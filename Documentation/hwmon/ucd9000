@@ -2,16 +2,17 @@ Kernel driver ucd9000
 =====================
 
 Supported chips:
-  * TI UCD90120, UCD90124, UCD9090, and UCD90910
-    Prefixes: 'ucd90120', 'ucd90124', 'ucd9090', 'ucd90910'
+  * TI UCD90120, UCD90124, UCD90160, UCD9090, and UCD90910
+    Prefixes: 'ucd90120', 'ucd90124', 'ucd90160', 'ucd9090', 'ucd90910'
     Addresses scanned: -
     Datasheets:
 	http://focus.ti.com/lit/ds/symlink/ucd90120.pdf
 	http://focus.ti.com/lit/ds/symlink/ucd90124.pdf
+	http://focus.ti.com/lit/ds/symlink/ucd90160.pdf
 	http://focus.ti.com/lit/ds/symlink/ucd9090.pdf
 	http://focus.ti.com/lit/ds/symlink/ucd90910.pdf
 
-Author: Guenter Roeck <guenter.roeck@ericsson.com>
+Author: Guenter Roeck <linux@roeck-us.net>
 
 
 Description
@@ -31,6 +32,13 @@ can be used for power supply enables, power-on reset signals, external
 interrupts, cascading, or other system functions. Twelve of these pins offer PWM
 functionality. Using these pins, the UCD90124 offers support for fan control,
 margining, and general-purpose PWM functions.
+
+The UCD90160 is a 16-rail PMBus/I2C addressable power-supply sequencer and
+monitor. The device integrates a 12-bit ADC for monitoring up to 16 power-supply
+voltage inputs. Twenty-six GPIO pins can be used for power supply enables,
+power-on reset signals, external interrupts, cascading, or other system
+functions. Twelve of these pins offer PWM functionality. Using these pins, the
+UCD90160 offers support for margining, and general-purpose PWM functions.
 
 The UCD9090 is a 10-rail PMBus/I2C addressable power-supply sequencer and
 monitor. The device integrates a 12-bit ADC for monitoring up to 10 power-supply
@@ -70,9 +78,9 @@ attributes are read-only.
 
 in[1-12]_label		"vout[1-12]".
 in[1-12]_input		Measured voltage. From READ_VOUT register.
-in[1-12]_min		Minumum Voltage. From VOUT_UV_WARN_LIMIT register.
+in[1-12]_min		Minimum Voltage. From VOUT_UV_WARN_LIMIT register.
 in[1-12]_max		Maximum voltage. From VOUT_OV_WARN_LIMIT register.
-in[1-12]_lcrit		Critical minumum Voltage. VOUT_UV_FAULT_LIMIT register.
+in[1-12]_lcrit		Critical minimum Voltage. VOUT_UV_FAULT_LIMIT register.
 in[1-12]_crit		Critical maximum voltage. From VOUT_OV_FAULT_LIMIT register.
 in[1-12]_min_alarm	Voltage low alarm. From VOLTAGE_UV_WARNING status.
 in[1-12]_max_alarm	Voltage high alarm. From VOLTAGE_OV_WARNING status.
@@ -82,7 +90,7 @@ in[1-12]_crit_alarm	Voltage critical high alarm. From VOLTAGE_OV_FAULT status.
 curr[1-12]_label	"iout[1-12]".
 curr[1-12]_input	Measured current. From READ_IOUT register.
 curr[1-12]_max		Maximum current. From IOUT_OC_WARN_LIMIT register.
-curr[1-12]_lcrit	Critical minumum output current. From IOUT_UC_FAULT_LIMIT
+curr[1-12]_lcrit	Critical minimum output current. From IOUT_UC_FAULT_LIMIT
 			register.
 curr[1-12]_crit		Critical maximum current. From IOUT_OC_FAULT_LIMIT register.
 curr[1-12]_max_alarm	Current high alarm. From IOUT_OC_WARNING status.

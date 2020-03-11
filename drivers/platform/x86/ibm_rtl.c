@@ -33,6 +33,8 @@
 #include <linux/mutex.h>
 #include <asm/bios_ebda.h>
 
+#include <linux/io-64-nonatomic-lo-hi.h>
+
 static bool force;
 module_param(force, bool, 0);
 MODULE_PARM_DESC(force, "Force driver load, ignore DMI data");
@@ -83,19 +85,6 @@ static void __iomem *rtl_cmd_addr;
 static u8 rtl_cmd_type;
 static u8 rtl_cmd_width;
 
-#ifndef readq
-static inline __u64 readq(const volatile void __iomem *addr)
-{
-	const volatile u32 __iomem *p = addr;
-	u32 low, high;
-
-	low = readl(p);
-	high = readl(p + 1);
-
-	return low + ((u64)high << 32);
-}
-#endif
-
 static void __iomem *rtl_port_map(phys_addr_t addr, unsigned long len)
 {
 	if (rtl_cmd_type == RTL_ADDR_TYPE_MMIO)
@@ -114,7 +103,7 @@ static void rtl_port_unmap(void __iomem *addr)
 static int ibm_rtl_write(u8 value)
 {
 	int ret = 0, count = 0;
-	static u32 cmd_port_val;
+	u32 cmd_port_val;
 
 	RTL_DEBUG("%s(%d)\n", __func__, value);
 
@@ -238,7 +227,7 @@ static void rtl_teardown_sysfs(void) {
 }
 
 
-static struct dmi_system_id __initdata ibm_rtl_dmi_table[] = {
+static const struct dmi_system_id ibm_rtl_dmi_table[] __initconst = {
 	{                                                  \
 		.matches = {                               \
 			DMI_MATCH(DMI_SYS_VENDOR, "IBM"),  \
@@ -255,7 +244,7 @@ static int __init ibm_rtl_init(void) {
 	if (force)
 		pr_warn("module loaded by force\n");
 	/* first ensure that we are running on IBM HW */
-	else if (efi_enabled || !dmi_check_system(ibm_rtl_dmi_table))
+	else if (efi_enabled(EFI_BOOT) || !dmi_check_system(ibm_rtl_dmi_table))
 		return -ENODEV;
 
 	/* Get the address for the Extended BIOS Data Area */

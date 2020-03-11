@@ -34,12 +34,13 @@
 #include <asm/tce.h>
 #include <asm/calgary.h>
 #include <asm/proto.h>
+#include <asm/cacheflush.h>
 
 /* flush a tce at 'tceaddr' to main memory */
 static inline void flush_tce(void* tceaddr)
 {
 	/* a single tce can't cross a cache line */
-	if (cpu_has_clflush)
+	if (boot_cpu_has(X86_FEATURE_CLFLUSH))
 		clflush(tceaddr);
 	else
 		wbinvd();

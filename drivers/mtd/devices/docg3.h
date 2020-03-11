@@ -22,6 +22,8 @@
 #ifndef _MTD_DOCG3_H
 #define _MTD_DOCG3_H
 
+#include <linux/mtd/mtd.h>
+
 /*
  * Flash memory areas :
  *   - 0x0000 .. 0x07ff : IPL
@@ -267,9 +269,23 @@
 #define DOC_LAYOUT_DPS_KEY_LENGTH	8
 
 /**
+ * struct docg3_cascade - Cascade of 1 to 4 docg3 chips
+ * @floors: floors (ie. one physical docg3 chip is one floor)
+ * @base: IO space to access all chips in the cascade
+ * @bch: the BCH correcting control structure
+ * @lock: lock to protect docg3 IO space from concurrent accesses
+ */
+struct docg3_cascade {
+	struct mtd_info *floors[DOC_MAX_NBFLOORS];
+	void __iomem *base;
+	struct bch_control *bch;
+	struct mutex lock;
+};
+
+/**
  * struct docg3 - DiskOnChip driver private data
  * @dev: the device currently under control
- * @base: mapped IO space
+ * @cascade: the cascade this device belongs to
  * @device_id: number of the cascaded DoCG3 device (0, 1, 2 or 3)
  * @if_cfg: if true, reads are on 16bits, else reads are on 8bits
 
@@ -283,11 +299,10 @@
  * @oob_autoecc: if 1, use only bytes 0-7, 15, and fill the others with HW ECC
  *               if 0, use all the 16 bytes.
  * @oob_write_buf: prepared OOB for next page_write
- * @debugfs_root: debugfs root node
  */
 struct docg3 {
 	struct device *dev;
-	void __iomem *base;
+	struct docg3_cascade *cascade;
 	unsigned int device_id:4;
 	unsigned int if_cfg:1;
 	unsigned int reliable:2;
@@ -296,7 +311,6 @@ struct docg3 {
 	loff_t oob_write_ofs;
 	int oob_autoecc;
 	u8 oob_write_buf[DOC_LAYOUT_OOB_SIZE];
-	struct dentry *debugfs_root;
 };
 
 #define doc_err(fmt, arg...) dev_err(docg3->dev, (fmt), ## arg)

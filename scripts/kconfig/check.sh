@@ -1,6 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
 # Needed for systems without gettext
-$* -xc -o /dev/null - > /dev/null 2>&1 << EOF
+$* -x c -o /dev/null - > /dev/null 2>&1 << EOF
 #include <libintl.h>
 int main()
 {
@@ -11,4 +12,3 @@ EOF
 if [ ! "$?" -eq "0"  ]; then
 	echo -DKBUILD_NO_NLS;
 fi
-

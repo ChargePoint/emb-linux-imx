@@ -1,7 +1,18 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /* Include file for the EP93XX GPIO controller machine specifics */
 
 #ifndef __GPIO_EP93XX_H
 #define __GPIO_EP93XX_H
+
+#include <mach/ep93xx-regs.h>
+
+#define EP93XX_GPIO_PHYS_BASE		EP93XX_APB_PHYS(0x00040000)
+#define EP93XX_GPIO_BASE		EP93XX_APB_IOMEM(0x00040000)
+#define EP93XX_GPIO_REG(x)		(EP93XX_GPIO_BASE + (x))
+#define EP93XX_GPIO_F_INT_STATUS	EP93XX_GPIO_REG(0x5c)
+#define EP93XX_GPIO_A_INT_STATUS	EP93XX_GPIO_REG(0xa0)
+#define EP93XX_GPIO_B_INT_STATUS	EP93XX_GPIO_REG(0xbc)
+#define EP93XX_GPIO_EEDRIVE		EP93XX_GPIO_REG(0xc8)
 
 /* GPIO port A.  */
 #define EP93XX_GPIO_LINE_A(x)		((x) + 0)

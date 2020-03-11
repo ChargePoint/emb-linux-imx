@@ -554,7 +554,7 @@ struct pmcraid_inquiry_data {
 	__u8	add_page_len;
 	__u8	length;
 	__u8	reserved2;
-	__le16	fw_version;
+	__be16	fw_version;
 	__u8	reserved3[16];
 };
 
@@ -628,7 +628,6 @@ struct pmcraid_interrupts {
 /* ISR parameters LLD allocates (one for each MSI-X if enabled) vectors */
 struct pmcraid_isr_param {
 	struct pmcraid_instance *drv_inst;
-	u16 vector;			/* allocated msi-x vector */
 	u8 hrrq_id;			/* hrrq entry index */
 };
 
@@ -698,13 +697,13 @@ struct pmcraid_instance {
 	dma_addr_t hrrq_start_bus_addr[PMCRAID_NUM_MSIX_VECTORS];
 
 	/* Pointer to 1st entry of HRRQ */
-	__be32 *hrrq_start[PMCRAID_NUM_MSIX_VECTORS];
+	__le32 *hrrq_start[PMCRAID_NUM_MSIX_VECTORS];
 
 	/* Pointer to last entry of HRRQ */
-	__be32 *hrrq_end[PMCRAID_NUM_MSIX_VECTORS];
+	__le32 *hrrq_end[PMCRAID_NUM_MSIX_VECTORS];
 
 	/* Pointer to current pointer of hrrq */
-	__be32 *hrrq_curr[PMCRAID_NUM_MSIX_VECTORS];
+	__le32 *hrrq_curr[PMCRAID_NUM_MSIX_VECTORS];
 
 	/* Lock for HRRQ access */
 	spinlock_t hrrq_lock[PMCRAID_NUM_MSIX_VECTORS];
@@ -756,7 +755,7 @@ struct pmcraid_instance {
 
 	/* structures related to command blocks */
 	struct kmem_cache *cmd_cachep;		/* cache for cmd blocks */
-	struct pci_pool *control_pool;		/* pool for control blocks */
+	struct dma_pool *control_pool;		/* pool for control blocks */
 	char   cmd_pool_name[64];		/* name of cmd cache */
 	char   ctl_pool_name[64];		/* name of control cache */
 
@@ -857,11 +856,11 @@ static struct pmcraid_ioasc_error pmcraid_ioasc_error_table[] = {
 	{0x01180600, IOASC_LOG_LEVEL_HARD,
 	 "Recovered Error, soft media error, sector reassignment suggested"},
 	{0x015D0000, IOASC_LOG_LEVEL_HARD,
-	 "Recovered Error, failure prediction thresold exceeded"},
+	 "Recovered Error, failure prediction threshold exceeded"},
 	{0x015D9200, IOASC_LOG_LEVEL_HARD,
-	 "Recovered Error, soft Cache Card Battery error thresold"},
+	 "Recovered Error, soft Cache Card Battery error threshold"},
 	{0x015D9200, IOASC_LOG_LEVEL_HARD,
-	 "Recovered Error, soft Cache Card Battery error thresold"},
+	 "Recovered Error, soft Cache Card Battery error threshold"},
 	{0x02048000, IOASC_LOG_LEVEL_HARD,
 	 "Not Ready, IOA Reset Required"},
 	{0x02408500, IOASC_LOG_LEVEL_HARD,

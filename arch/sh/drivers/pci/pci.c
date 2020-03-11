@@ -32,38 +32,60 @@ static struct pci_channel *hose_head, **hose_tail = &hose_head;
 
 static int pci_initialized;
 
-static void __devinit pcibios_scanbus(struct pci_channel *hose)
+static void pcibios_scanbus(struct pci_channel *hose)
 {
 	static int next_busno;
 	static int need_domain_info;
 	LIST_HEAD(resources);
-	int i;
-	struct pci_bus *bus;
+	struct resource *res;
+	resource_size_t offset;
+	int i, ret;
+	struct pci_host_bridge *bridge;
 
-	for (i = 0; i < hose->nr_resources; i++)
-		pci_add_resource(&resources, hose->resources + i);
+	bridge = pci_alloc_host_bridge(0);
+	if (!bridge)
+		return;
 
-	bus = pci_scan_root_bus(NULL, next_busno, hose->pci_ops, hose,
-				&resources);
-	hose->bus = bus;
+	for (i = 0; i < hose->nr_resources; i++) {
+		res = hose->resources + i;
+		offset = 0;
+		if (res->flags & IORESOURCE_IO)
+			offset = hose->io_offset;
+		else if (res->flags & IORESOURCE_MEM)
+			offset = hose->mem_offset;
+		pci_add_resource_offset(&resources, res, offset);
+	}
+
+	list_splice_init(&resources, &bridge->windows);
+	bridge->dev.parent = NULL;
+	bridge->sysdata = hose;
+	bridge->busnr = next_busno;
+	bridge->ops = hose->pci_ops;
+	bridge->swizzle_irq = pci_common_swizzle;
+	bridge->map_irq = pcibios_map_platform_irq;
+
+	ret = pci_scan_root_bus_bridge(bridge);
+	if (ret) {
+		pci_free_host_bridge(bridge);
+		return;
+	}
+
+	hose->bus = bridge->bus;
 
 	need_domain_info = need_domain_info || hose->index;
 	hose->need_domain_info = need_domain_info;
-	if (bus) {
-		next_busno = bus->subordinate + 1;
-		/* Don't allow 8-bit bus number overflow inside the hose -
-		   reserve some space for bridges. */
-		if (next_busno > 224) {
-			next_busno = 0;
-			need_domain_info = 1;
-		}
 
-		pci_bus_size_bridges(bus);
-		pci_bus_assign_resources(bus);
-		pci_enable_bridges(bus);
-	} else {
-		pci_free_resource_list(&resources);
+	next_busno = hose->bus->busn_res.end + 1;
+	/* Don't allow 8-bit bus number overflow inside the hose -
+	   reserve some space for bridges. */
+	if (next_busno > 224) {
+		next_busno = 0;
+		need_domain_info = 1;
 	}
+
+	pci_bus_size_bridges(hose->bus);
+	pci_bus_assign_resources(hose->bus);
+	pci_bus_add_devices(hose->bus);
 }
 
 /*
@@ -73,7 +95,7 @@ static void __devinit pcibios_scanbus(struct pci_channel *hose)
 DEFINE_RAW_SPINLOCK(pci_config_lock);
 static DEFINE_MUTEX(pci_scan_mutex);
 
-int __devinit register_pci_controller(struct pci_channel *hose)
+int register_pci_controller(struct pci_channel *hose)
 {
 	int i;
 
@@ -133,8 +155,6 @@ static int __init pcibios_init(void)
 	for (hose = hose_head; hose; hose = hose->next)
 		pcibios_scanbus(hose);
 
-	pci_fixup_irqs(pci_common_swizzle, pcibios_map_platform_irq);
-
 	dma_debug_add_bus(&pci_bus_type);
 
 	pci_initialized = 1;
@@ -142,44 +162,6 @@ static int __init pcibios_init(void)
 	return 0;
 }
 subsys_initcall(pcibios_init);
-
-static void pcibios_fixup_device_resources(struct pci_dev *dev,
-	struct pci_bus *bus)
-{
-	/* Update device resources.  */
-	struct pci_channel *hose = bus->sysdata;
-	unsigned long offset = 0;
-	int i;
-
-	for (i = 0; i < PCI_NUM_RESOURCES; i++) {
-		if (!dev->resource[i].start)
-			continue;
-		if (dev->resource[i].flags & IORESOURCE_IO)
-			offset = hose->io_offset;
-		else if (dev->resource[i].flags & IORESOURCE_MEM)
-			offset = hose->mem_offset;
-
-		dev->resource[i].start += offset;
-		dev->resource[i].end += offset;
-	}
-}
-
-/*
- *  Called after each bus is probed, but before its children
- *  are examined.
- */
-void __devinit pcibios_fixup_bus(struct pci_bus *bus)
-{
-	struct pci_dev *dev;
-	struct list_head *ln;
-
-	for (ln = bus->devices.next; ln != &bus->devices; ln = ln->next) {
-		dev = pci_dev_b(ln);
-
-		if ((dev->class >> 8) != PCI_CLASS_BRIDGE_PCI)
-			pcibios_fixup_device_resources(dev, bus);
-	}
-}
 
 /*
  * We need to avoid collisions with `mirrored' VGA ports
@@ -206,51 +188,6 @@ resource_size_t pcibios_align_resource(void *data, const struct resource *res,
 	}
 
 	return start;
-}
-
-void pcibios_resource_to_bus(struct pci_dev *dev, struct pci_bus_region *region,
-			     struct resource *res)
-{
-	struct pci_channel *hose = dev->sysdata;
-	unsigned long offset = 0;
-
-	if (res->flags & IORESOURCE_IO)
-		offset = hose->io_offset;
-	else if (res->flags & IORESOURCE_MEM)
-		offset = hose->mem_offset;
-
-	region->start = res->start - offset;
-	region->end = res->end - offset;
-}
-
-void pcibios_bus_to_resource(struct pci_dev *dev, struct resource *res,
-			     struct pci_bus_region *region)
-{
-	struct pci_channel *hose = dev->sysdata;
-	unsigned long offset = 0;
-
-	if (res->flags & IORESOURCE_IO)
-		offset = hose->io_offset;
-	else if (res->flags & IORESOURCE_MEM)
-		offset = hose->mem_offset;
-
-	res->start = region->start + offset;
-	res->end = region->end + offset;
-}
-
-int pcibios_enable_device(struct pci_dev *dev, int mask)
-{
-	return pci_enable_resources(dev, mask);
-}
-
-void __init pcibios_update_irq(struct pci_dev *dev, int irq)
-{
-	pci_write_config_byte(dev, PCI_INTERRUPT_LINE, irq);
-}
-
-char * __devinit __weak pcibios_setup(char *str)
-{
-	return str;
 }
 
 static void __init
@@ -285,7 +222,7 @@ pcibios_bus_report_status_early(struct pci_channel *hose,
  * We can't use pci_find_device() here since we are
  * called from interrupt context.
  */
-static void __init_refok
+static void __ref
 pcibios_bus_report_status(struct pci_bus *bus, unsigned int status_mask,
 			  int warn)
 {
@@ -320,7 +257,7 @@ pcibios_bus_report_status(struct pci_bus *bus, unsigned int status_mask,
 			pcibios_bus_report_status(dev->subordinate, status_mask, warn);
 }
 
-void __init_refok pcibios_report_status(unsigned int status_mask, int warn)
+void __ref pcibios_report_status(unsigned int status_mask, int warn)
 {
 	struct pci_channel *hose;
 
@@ -333,31 +270,10 @@ void __init_refok pcibios_report_status(unsigned int status_mask, int warn)
 	}
 }
 
-int pci_mmap_page_range(struct pci_dev *dev, struct vm_area_struct *vma,
-			enum pci_mmap_state mmap_state, int write_combine)
-{
-	/*
-	 * I/O space can be accessed via normal processor loads and stores on
-	 * this platform but for now we elect not to do this and portable
-	 * drivers should not do this anyway.
-	 */
-	if (mmap_state == pci_mmap_io)
-		return -EINVAL;
-
-	/*
-	 * Ignore write-combine; for now only return uncached mappings.
-	 */
-	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-
-	return remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
-			       vma->vm_end - vma->vm_start,
-			       vma->vm_page_prot);
-}
-
 #ifndef CONFIG_GENERIC_IOMAP
 
-static void __iomem *ioport_map_pci(struct pci_dev *dev,
-				    unsigned long port, unsigned int nr)
+void __iomem *__pci_ioport_map(struct pci_dev *dev,
+			       unsigned long port, unsigned int nr)
 {
 	struct pci_channel *chan = dev->sysdata;
 
@@ -380,9 +296,5 @@ EXPORT_SYMBOL(pci_iounmap);
 
 #endif /* CONFIG_GENERIC_IOMAP */
 
-#ifdef CONFIG_HOTPLUG
-EXPORT_SYMBOL(pcibios_resource_to_bus);
-EXPORT_SYMBOL(pcibios_bus_to_resource);
 EXPORT_SYMBOL(PCIBIOS_MIN_IO);
 EXPORT_SYMBOL(PCIBIOS_MIN_MEM);
-#endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Platform dependent support for HP simulator.
  *
@@ -24,12 +25,6 @@
 #include <asm/hpsim.h>
 
 #include "hpsim_ssc.h"
-
-void
-ia64_ssc_connect_irq (long intr, long irq)
-{
-	ia64_ssc(intr, irq, 0, 0, SSC_CONNECT_INTERRUPT);
-}
 
 void
 ia64_ctl_trace (long on)

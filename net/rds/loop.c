@@ -34,6 +34,7 @@
 #include <linux/slab.h>
 #include <linux/in.h>
 
+#include "rds_single_path.h"
 #include "rds.h"
 #include "loop.h"
 
@@ -79,7 +80,7 @@ static int rds_loop_xmit(struct rds_connection *conn, struct rds_message *rm,
 	rds_message_addref(rm);
 
 	rds_recv_incoming(conn, conn->c_laddr, conn->c_faddr, &rm->m_inc,
-			  GFP_KERNEL, KM_USER0);
+			  GFP_KERNEL);
 
 	rds_send_drop_acked(conn, be64_to_cpu(rm->m_inc.i_hdr.h_sequence),
 			    NULL);
@@ -95,12 +96,13 @@ out:
  */
 static void rds_loop_inc_free(struct rds_incoming *inc)
 {
-        struct rds_message *rm = container_of(inc, struct rds_message, m_inc);
-        rds_message_put(rm);
+	struct rds_message *rm = container_of(inc, struct rds_message, m_inc);
+
+	rds_message_put(rm);
 }
 
 /* we need to at least give the thread something to succeed */
-static int rds_loop_recv(struct rds_connection *conn)
+static int rds_loop_recv_path(struct rds_conn_path *cp)
 {
 	return 0;
 }
@@ -121,7 +123,7 @@ static int rds_loop_conn_alloc(struct rds_connection *conn, gfp_t gfp)
 	struct rds_loop_connection *lc;
 	unsigned long flags;
 
-	lc = kzalloc(sizeof(struct rds_loop_connection), GFP_KERNEL);
+	lc = kzalloc(sizeof(struct rds_loop_connection), gfp);
 	if (!lc)
 		return -ENOMEM;
 
@@ -148,13 +150,13 @@ static void rds_loop_conn_free(void *arg)
 	kfree(lc);
 }
 
-static int rds_loop_conn_connect(struct rds_connection *conn)
+static int rds_loop_conn_path_connect(struct rds_conn_path *cp)
 {
-	rds_connect_complete(conn);
+	rds_connect_complete(cp->cp_conn);
 	return 0;
 }
 
-static void rds_loop_conn_shutdown(struct rds_connection *conn)
+static void rds_loop_conn_path_shutdown(struct rds_conn_path *cp)
 {
 }
 
@@ -183,12 +185,13 @@ void rds_loop_exit(void)
  */
 struct rds_transport rds_loop_transport = {
 	.xmit			= rds_loop_xmit,
-	.recv			= rds_loop_recv,
+	.recv_path		= rds_loop_recv_path,
 	.conn_alloc		= rds_loop_conn_alloc,
 	.conn_free		= rds_loop_conn_free,
-	.conn_connect		= rds_loop_conn_connect,
-	.conn_shutdown		= rds_loop_conn_shutdown,
+	.conn_path_connect	= rds_loop_conn_path_connect,
+	.conn_path_shutdown	= rds_loop_conn_path_shutdown,
 	.inc_copy_to_user	= rds_message_inc_copy_to_user,
 	.inc_free		= rds_loop_inc_free,
 	.t_name			= "loopback",
+	.t_type			= RDS_TRANS_LOOP,
 };

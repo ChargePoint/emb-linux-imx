@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /* Glue code to lib/swiotlb.c */
 
 #include <linux/pci.h>
@@ -15,16 +16,24 @@ int swiotlb __read_mostly;
 EXPORT_SYMBOL(swiotlb);
 
 static void *ia64_swiotlb_alloc_coherent(struct device *dev, size_t size,
-					 dma_addr_t *dma_handle, gfp_t gfp)
+					 dma_addr_t *dma_handle, gfp_t gfp,
+					 unsigned long attrs)
 {
 	if (dev->coherent_dma_mask != DMA_BIT_MASK(64))
 		gfp |= GFP_DMA;
 	return swiotlb_alloc_coherent(dev, size, dma_handle, gfp);
 }
 
-struct dma_map_ops swiotlb_dma_ops = {
-	.alloc_coherent = ia64_swiotlb_alloc_coherent,
-	.free_coherent = swiotlb_free_coherent,
+static void ia64_swiotlb_free_coherent(struct device *dev, size_t size,
+				       void *vaddr, dma_addr_t dma_addr,
+				       unsigned long attrs)
+{
+	swiotlb_free_coherent(dev, size, vaddr, dma_addr);
+}
+
+const struct dma_map_ops swiotlb_dma_ops = {
+	.alloc = ia64_swiotlb_alloc_coherent,
+	.free = ia64_swiotlb_free_coherent,
 	.map_page = swiotlb_map_page,
 	.unmap_page = swiotlb_unmap_page,
 	.map_sg = swiotlb_map_sg_attrs,

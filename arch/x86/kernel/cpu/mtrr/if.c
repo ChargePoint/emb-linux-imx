@@ -1,8 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/capability.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
-#include <linux/module.h>
 #include <linux/ctype.h>
 #include <linux/string.h>
 #include <linux/slab.h>
@@ -167,10 +167,13 @@ mtrr_ioctl(struct file *file, unsigned int cmd, unsigned long __arg)
 {
 	int err = 0;
 	mtrr_type type;
+	unsigned long base;
 	unsigned long size;
 	struct mtrr_sentry sentry;
 	struct mtrr_gentry gentry;
 	void __user *arg = (void __user *) __arg;
+
+	memset(&gentry, 0, sizeof(gentry));
 
 	switch (cmd) {
 	case MTRRIOC_ADD_ENTRY:
@@ -267,14 +270,14 @@ mtrr_ioctl(struct file *file, unsigned int cmd, unsigned long __arg)
 #endif
 		if (gentry.regnum >= num_var_ranges)
 			return -EINVAL;
-		mtrr_if->get(gentry.regnum, &gentry.base, &size, &type);
+		mtrr_if->get(gentry.regnum, &base, &size, &type);
 
 		/* Hide entries that go above 4GB */
-		if (gentry.base + size - 1 >= (1UL << (8 * sizeof(gentry.size) - PAGE_SHIFT))
+		if (base + size - 1 >= (1UL << (8 * sizeof(gentry.size) - PAGE_SHIFT))
 		    || size >= (1UL << (8 * sizeof(gentry.size) - PAGE_SHIFT)))
 			gentry.base = gentry.size = gentry.type = 0;
 		else {
-			gentry.base <<= PAGE_SHIFT;
+			gentry.base = base << PAGE_SHIFT;
 			gentry.size = size << PAGE_SHIFT;
 			gentry.type = type;
 		}
@@ -321,11 +324,12 @@ mtrr_ioctl(struct file *file, unsigned int cmd, unsigned long __arg)
 #endif
 		if (gentry.regnum >= num_var_ranges)
 			return -EINVAL;
-		mtrr_if->get(gentry.regnum, &gentry.base, &size, &type);
+		mtrr_if->get(gentry.regnum, &base, &size, &type);
 		/* Hide entries that would overflow */
 		if (size != (__typeof__(gentry.size))size)
 			gentry.base = gentry.size = gentry.type = 0;
 		else {
+			gentry.base = base;
 			gentry.size = size;
 			gentry.type = type;
 		}
@@ -402,11 +406,10 @@ static const struct file_operations mtrr_fops = {
 static int mtrr_seq_show(struct seq_file *seq, void *offset)
 {
 	char factor;
-	int i, max, len;
+	int i, max;
 	mtrr_type type;
 	unsigned long base, size;
 
-	len = 0;
 	max = num_var_ranges;
 	for (i = 0; i < max; i++) {
 		mtrr_if->get(i, &base, &size, &type);
@@ -423,11 +426,10 @@ static int mtrr_seq_show(struct seq_file *seq, void *offset)
 			size >>= 20 - PAGE_SHIFT;
 		}
 		/* Base can be > 32bit */
-		len += seq_printf(seq, "reg%02i: base=0x%06lx000 "
-			"(%5luMB), size=%5lu%cB, count=%d: %s\n",
-			i, base, base >> (20 - PAGE_SHIFT), size,
-			factor, mtrr_usage_table[i],
-			mtrr_attrib_to_str(type));
+		seq_printf(seq, "reg%02i: base=0x%06lx000 (%5luMB), size=%5lu%cB, count=%d: %s\n",
+			   i, base, base >> (20 - PAGE_SHIFT),
+			   size, factor,
+			   mtrr_usage_table[i], mtrr_attrib_to_str(type));
 	}
 	return 0;
 }

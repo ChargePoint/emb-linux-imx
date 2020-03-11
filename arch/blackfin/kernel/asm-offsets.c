@@ -14,6 +14,7 @@
 #include <linux/irq.h>
 #include <linux/thread_info.h>
 #include <linux/kbuild.h>
+#include <asm/pda.h>
 
 int main(void)
 {
@@ -40,6 +41,12 @@ int main(void)
 	DEFINE(THREAD_ESP0, offsetof(struct thread_struct, esp0));
 	DEFINE(THREAD_PC, offsetof(struct thread_struct, pc));
 	DEFINE(KERNEL_STACK_SIZE, THREAD_SIZE);
+
+	/* offsets in thread_info struct */
+	OFFSET(TI_TASK, thread_info, task);
+	OFFSET(TI_FLAGS, thread_info, flags);
+	OFFSET(TI_CPU, thread_info, cpu);
+	OFFSET(TI_PREEMPT, thread_info, preempt_count);
 
 	/* offsets into the pt_regs */
 	DEFINE(PT_ORIG_R0, offsetof(struct pt_regs, orig_r0));

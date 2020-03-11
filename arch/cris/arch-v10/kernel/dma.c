@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /* Wrapper for DMA channel allocator that updates DMA client muxing.
  * Copyright 2004-2007, Axis Communications AB
  */
@@ -8,6 +9,7 @@
 
 #include <asm/dma.h>
 #include <arch/svinto.h>
+#include <arch/system.h>
 
 /* Macro to access ETRAX 100 registers */
 #define SETS(var, reg, field, val) var = (var & ~IO_MASK_(reg##_, field##_)) | \

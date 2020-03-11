@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /* Wrapper for DMA channel allocator that starts clocks etc */
 
 #include <linux/kernel.h>
@@ -9,7 +10,6 @@
 #include <hwregs/config_defs.h>
 #include <hwregs/strmux_defs.h>
 #include <linux/errno.h>
-#include <asm/system.h>
 #include <mach/arbiter.h>
 
 static char used_dma_channels[MAX_DMA_CHANNELS];
@@ -44,7 +44,6 @@ int crisv32_request_dma(unsigned int dmanr, const char *device_id,
 		}
 		if (options & DMA_PANIC_ON_ERROR)
 			panic("request_dma error!");
-		spin_unlock_irqrestore(&dma_lock, flags);
 		return -EBUSY;
 	}
 	clk_ctrl = REG_RD(config, regi_config, rw_clk_ctrl);

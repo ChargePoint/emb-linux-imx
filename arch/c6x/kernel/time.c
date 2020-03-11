@@ -20,12 +20,13 @@
 #include <linux/timex.h>
 #include <linux/profile.h>
 
+#include <asm/special_insns.h>
 #include <asm/timer64.h>
 
 static u32 sched_clock_multiplier;
 #define SCHED_CLOCK_SHIFT 16
 
-static cycle_t tsc_read(struct clocksource *cs)
+static u64 tsc_read(struct clocksource *cs)
 {
 	return get_cycles();
 }
@@ -48,7 +49,7 @@ u64 sched_clock(void)
 	return (tsc * sched_clock_multiplier) >> SCHED_CLOCK_SHIFT;
 }
 
-void time_init(void)
+void __init time_init(void)
 {
 	u64 tmp = (u64)NSEC_PER_SEC << SCHED_CLOCK_SHIFT;
 

@@ -12,7 +12,6 @@
 #include <linux/irq.h>
 #include <linux/smp.h>
 #include <linux/interrupt.h>
-#include <linux/init.h>
 #include <linux/cpu.h>
 #include <linux/of.h>
 
@@ -65,7 +64,11 @@ static inline void icp_hv_set_xirr(unsigned int value)
 static inline void icp_hv_set_qirr(int n_cpu , u8 value)
 {
 	int hw_cpu = get_hard_smp_processor_id(n_cpu);
-	long rc = plpar_hcall_norets(H_IPI, hw_cpu, value);
+	long rc;
+
+	/* Make sure all previous accesses are ordered before IPI sending */
+	mb();
+	rc = plpar_hcall_norets(H_IPI, hw_cpu, value);
 	if (rc != H_SUCCESS) {
 		pr_err("%s: bad return code qirr cpu=%d hw_cpu=%d mfrr=0x%x "
 			"returned %ld\n", __func__, n_cpu, hw_cpu, value, rc);
@@ -109,10 +112,10 @@ static unsigned int icp_hv_get_irq(void)
 	unsigned int irq;
 
 	if (vec == XICS_IRQ_SPURIOUS)
-		return NO_IRQ;
+		return 0;
 
-	irq = irq_radix_revmap_lookup(xics_host, vec);
-	if (likely(irq != NO_IRQ)) {
+	irq = irq_find_mapping(xics_host, vec);
+	if (likely(irq)) {
 		xics_push_cppr(vec);
 		return irq;
 	}
@@ -123,7 +126,7 @@ static unsigned int icp_hv_get_irq(void)
 	/* We might learn about it later, so EOI it */
 	icp_hv_set_xirr(xirr);
 
-	return NO_IRQ;
+	return 0;
 }
 
 static void icp_hv_set_cpu_priority(unsigned char cppr)
@@ -135,7 +138,7 @@ static void icp_hv_set_cpu_priority(unsigned char cppr)
 
 #ifdef CONFIG_SMP
 
-static void icp_hv_cause_ipi(int cpu, unsigned long data)
+static void icp_hv_cause_ipi(int cpu)
 {
 	icp_hv_set_qirr(cpu, IPI_PRIORITY);
 }

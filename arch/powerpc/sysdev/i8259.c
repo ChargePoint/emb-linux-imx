@@ -8,7 +8,6 @@
  */
 #undef DEBUG
 
-#include <linux/init.h>
 #include <linux/ioport.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
@@ -25,7 +24,7 @@ static unsigned char cached_8259[2] = { 0xff, 0xff };
 
 static DEFINE_RAW_SPINLOCK(i8259_lock);
 
-static struct irq_host *i8259_host;
+static struct irq_domain *i8259_host;
 
 /*
  * Acknowledge the IRQ using either the PCI host bridge's interrupt
@@ -69,9 +68,9 @@ unsigned int i8259_irq(void)
 		if (!pci_intack)
 			outb(0x0B, 0x20);	/* ISR register */
 		if(~inb(0x20) & 0x80)
-			irq = NO_IRQ;
+			irq = 0;
 	} else if (irq == 0xff)
-		irq = NO_IRQ;
+		irq = 0;
 
 	if (lock)
 		raw_spin_unlock(&i8259_lock);
@@ -163,12 +162,14 @@ static struct resource pic_edgectrl_iores = {
 	.flags = IORESOURCE_BUSY,
 };
 
-static int i8259_host_match(struct irq_host *h, struct device_node *node)
+static int i8259_host_match(struct irq_domain *h, struct device_node *node,
+			    enum irq_domain_bus_token bus_token)
 {
-	return h->of_node == NULL || h->of_node == node;
+	struct device_node *of_node = irq_domain_get_of_node(h);
+	return of_node == NULL || of_node == node;
 }
 
-static int i8259_host_map(struct irq_host *h, unsigned int virq,
+static int i8259_host_map(struct irq_domain *h, unsigned int virq,
 			  irq_hw_number_t hw)
 {
 	pr_debug("i8259_host_map(%d, 0x%lx)\n", virq, hw);
@@ -185,7 +186,7 @@ static int i8259_host_map(struct irq_host *h, unsigned int virq,
 	return 0;
 }
 
-static int i8259_host_xlate(struct irq_host *h, struct device_node *ct,
+static int i8259_host_xlate(struct irq_domain *h, struct device_node *ct,
 			    const u32 *intspec, unsigned int intsize,
 			    irq_hw_number_t *out_hwirq, unsigned int *out_flags)
 {
@@ -205,13 +206,13 @@ static int i8259_host_xlate(struct irq_host *h, struct device_node *ct,
 	return 0;
 }
 
-static struct irq_host_ops i8259_host_ops = {
+static const struct irq_domain_ops i8259_host_ops = {
 	.match = i8259_host_match,
 	.map = i8259_host_map,
 	.xlate = i8259_host_xlate,
 };
 
-struct irq_host *i8259_get_host(void)
+struct irq_domain *i8259_get_host(void)
 {
 	return i8259_host;
 }
@@ -237,7 +238,7 @@ void i8259_init(struct device_node *node, unsigned long intack_addr)
 	/* init master interrupt controller */
 	outb(0x11, 0x20); /* Start init sequence */
 	outb(0x00, 0x21); /* Vector base */
-	outb(0x04, 0x21); /* edge tiggered, Cascade (slave) on IRQ2 */
+	outb(0x04, 0x21); /* edge triggered, Cascade (slave) on IRQ2 */
 	outb(0x01, 0x21); /* Select 8086 mode */
 
 	/* init slave interrupt controller */
@@ -263,8 +264,7 @@ void i8259_init(struct device_node *node, unsigned long intack_addr)
 	raw_spin_unlock_irqrestore(&i8259_lock, flags);
 
 	/* create a legacy host */
-	i8259_host = irq_alloc_host(node, IRQ_HOST_MAP_LEGACY,
-				    0, &i8259_host_ops, 0);
+	i8259_host = irq_domain_add_legacy_isa(node, &i8259_host_ops, NULL);
 	if (i8259_host == NULL) {
 		printk(KERN_ERR "i8259: failed to allocate irq host !\n");
 		return;

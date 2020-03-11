@@ -25,6 +25,7 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/i2c.h>
+#include <linux/pmbus.h>
 #include "pmbus.h"
 
 /*
@@ -117,6 +118,8 @@ static int pmbus_identify(struct i2c_client *client,
 		} else {
 			info->pages = 1;
 		}
+
+		pmbus_clear_faults(client);
 	}
 
 	if (pmbus_check_byte_register(client, 0, PMBUS_VOUT_MODE)) {
@@ -129,6 +132,7 @@ static int pmbus_identify(struct i2c_client *client,
 				break;
 			case 1:
 				info->format[PSC_VOLTAGE_OUT] = vid;
+				info->vrm_version = vr11;
 				break;
 			case 2:
 				info->format[PSC_VOLTAGE_OUT] = direct;
@@ -166,33 +170,28 @@ static int pmbus_probe(struct i2c_client *client,
 		       const struct i2c_device_id *id)
 {
 	struct pmbus_driver_info *info;
-	int ret;
+	struct pmbus_platform_data *pdata = NULL;
+	struct device *dev = &client->dev;
 
-	info = kzalloc(sizeof(struct pmbus_driver_info), GFP_KERNEL);
+	info = devm_kzalloc(dev, sizeof(struct pmbus_driver_info), GFP_KERNEL);
 	if (!info)
 		return -ENOMEM;
 
+	if (!strcmp(id->name, "dps460") || !strcmp(id->name, "dps800") ||
+	    !strcmp(id->name, "sgd009")) {
+		pdata = devm_kzalloc(dev, sizeof(struct pmbus_platform_data),
+				     GFP_KERNEL);
+		if (!pdata)
+			return -ENOMEM;
+
+		pdata->flags = PMBUS_SKIP_STATUS_CHECK;
+	}
+
 	info->pages = id->driver_data;
 	info->identify = pmbus_identify;
+	dev->platform_data = pdata;
 
-	ret = pmbus_do_probe(client, id, info);
-	if (ret < 0)
-		goto out;
-	return 0;
-
-out:
-	kfree(info);
-	return ret;
-}
-
-static int pmbus_remove(struct i2c_client *client)
-{
-	const struct pmbus_driver_info *info;
-
-	info = pmbus_get_driver_info(client);
-	pmbus_do_remove(client);
-	kfree(info);
-	return 0;
+	return pmbus_do_probe(client, id, info);
 }
 
 /*
@@ -202,12 +201,21 @@ static const struct i2c_device_id pmbus_id[] = {
 	{"adp4000", 1},
 	{"bmr453", 1},
 	{"bmr454", 1},
+	{"dps460", 1},
+	{"dps800", 1},
+	{"mdt040", 1},
 	{"ncp4200", 1},
 	{"ncp4208", 1},
 	{"pdt003", 1},
 	{"pdt006", 1},
 	{"pdt012", 1},
 	{"pmbus", 0},
+	{"sgd009", 1},
+	{"tps40400", 1},
+	{"tps544b20", 1},
+	{"tps544b25", 1},
+	{"tps544c20", 1},
+	{"tps544c25", 1},
 	{"udt020", 1},
 	{}
 };
@@ -220,22 +228,12 @@ static struct i2c_driver pmbus_driver = {
 		   .name = "pmbus",
 		   },
 	.probe = pmbus_probe,
-	.remove = pmbus_remove,
+	.remove = pmbus_do_remove,
 	.id_table = pmbus_id,
 };
 
-static int __init pmbus_init(void)
-{
-	return i2c_add_driver(&pmbus_driver);
-}
-
-static void __exit pmbus_exit(void)
-{
-	i2c_del_driver(&pmbus_driver);
-}
+module_i2c_driver(pmbus_driver);
 
 MODULE_AUTHOR("Guenter Roeck");
 MODULE_DESCRIPTION("Generic PMBus driver");
 MODULE_LICENSE("GPL");
-module_init(pmbus_init);
-module_exit(pmbus_exit);

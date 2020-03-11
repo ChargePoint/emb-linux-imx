@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * security/tomoyo/util.c
  *
@@ -5,6 +6,8 @@
  */
 
 #include <linux/slab.h>
+#include <linux/rculist.h>
+
 #include "common.h"
 
 /* Lock for protecting policy. */
@@ -492,13 +495,13 @@ static bool tomoyo_correct_word2(const char *string, size_t len)
 				if (d < '0' || d > '7' || e < '0' || e > '7')
 					break;
 				c = tomoyo_make_byte(c, d, e);
-				if (tomoyo_invalid(c))
-					continue; /* pattern is not \000 */
+				if (c <= ' ' || c >= 127)
+					continue;
 			}
 			goto out;
 		} else if (in_repetition && c == '/') {
 			goto out;
-		} else if (tomoyo_invalid(c)) {
+		} else if (c <= ' ' || c >= 127) {
 			goto out;
 		}
 	}
@@ -666,7 +669,7 @@ void tomoyo_fill_path_info(struct tomoyo_path_info *ptr)
 	ptr->const_len = tomoyo_const_part_length(name);
 	ptr->is_dir = len && (name[len - 1] == '/');
 	ptr->is_patterned = (ptr->const_len < len);
-	ptr->hash = full_name_hash(name, len);
+	ptr->hash = full_name_hash(NULL, name, len);
 }
 
 /**
@@ -948,20 +951,18 @@ bool tomoyo_path_matches_pattern(const struct tomoyo_path_info *filename,
  */
 const char *tomoyo_get_exe(void)
 {
+	struct file *exe_file;
+	const char *cp;
 	struct mm_struct *mm = current->mm;
-	struct vm_area_struct *vma;
-	const char *cp = NULL;
 
 	if (!mm)
 		return NULL;
-	down_read(&mm->mmap_sem);
-	for (vma = mm->mmap; vma; vma = vma->vm_next) {
-		if ((vma->vm_flags & VM_EXECUTABLE) && vma->vm_file) {
-			cp = tomoyo_realpath_from_path(&vma->vm_file->f_path);
-			break;
-		}
-	}
-	up_read(&mm->mmap_sem);
+	exe_file = get_mm_exe_file(mm);
+	if (!exe_file)
+		return NULL;
+
+	cp = tomoyo_realpath_from_path(&exe_file->f_path);
+	fput(exe_file);
 	return cp;
 }
 

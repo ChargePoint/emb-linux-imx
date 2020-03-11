@@ -57,7 +57,7 @@ static inline int redboot_checksum(struct fis_image_desc *img)
 }
 
 static int parse_redboot_partitions(struct mtd_info *master,
-				    struct mtd_partition **pparts,
+				    const struct mtd_partition **pparts,
 				    struct mtd_part_parser_data *data)
 {
 	int nrparts = 0;
@@ -78,8 +78,7 @@ static int parse_redboot_partitions(struct mtd_info *master,
 
 	if ( directory < 0 ) {
 		offset = master->size + directory * master->erasesize;
-		while (mtd_can_have_bb(master) &&
-		       mtd_block_isbad(master, offset)) {
+		while (mtd_block_isbad(master, offset)) {
 			if (!offset) {
 			nogood:
 				printk(KERN_NOTICE "Failed to find a non-bad block to check for RedBoot partition table\n");
@@ -89,8 +88,7 @@ static int parse_redboot_partitions(struct mtd_info *master,
 		}
 	} else {
 		offset = directory * master->erasesize;
-		while (mtd_can_have_bb(master) &&
-		       mtd_block_isbad(master, offset)) {
+		while (mtd_block_isbad(master, offset)) {
 			offset += master->erasesize;
 			if (offset == master->size)
 				goto nogood;
@@ -292,27 +290,13 @@ static int parse_redboot_partitions(struct mtd_info *master,
 }
 
 static struct mtd_part_parser redboot_parser = {
-	.owner = THIS_MODULE,
 	.parse_fn = parse_redboot_partitions,
 	.name = "RedBoot",
 };
+module_mtd_part_parser(redboot_parser);
 
 /* mtd parsers will request the module by parser name */
 MODULE_ALIAS("RedBoot");
-
-static int __init redboot_parser_init(void)
-{
-	return register_mtd_parser(&redboot_parser);
-}
-
-static void __exit redboot_parser_exit(void)
-{
-	deregister_mtd_parser(&redboot_parser);
-}
-
-module_init(redboot_parser_init);
-module_exit(redboot_parser_exit);
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("David Woodhouse <dwmw2@infradead.org>");
 MODULE_DESCRIPTION("Parsing code for RedBoot Flash Image System (FIS) tables");

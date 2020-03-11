@@ -40,10 +40,10 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/flash.h>
 
-#include <mach/pxa25x.h>
-#include <mach/mmc.h>
-#include <mach/udc.h>
-#include <mach/gumstix.h>
+#include "pxa25x.h"
+#include <linux/platform_data/mmc-pxamci.h>
+#include "udc.h"
+#include "gumstix.h"
 
 #include "generic.h"
 
@@ -139,15 +139,14 @@ static void gumstix_setup_bt_clock(void)
 {
 	int timeout = 500;
 
-	if (!(OSCC & OSCC_OOK))
-		pr_warning("32kHz clock was not on. Bootloader may need to "
-				"be updated\n");
+	if (!(readl(OSCC) & OSCC_OOK))
+		pr_warn("32kHz clock was not on. Bootloader may need to be updated\n");
 	else
 		return;
 
-	OSCC |= OSCC_OON;
+	writel(readl(OSCC) | OSCC_OON, OSCC);
 	do {
-		if (OSCC & OSCC_OOK)
+		if (readl(OSCC) & OSCC_OOK)
 			break;
 		udelay(1);
 	} while (--timeout);
@@ -235,9 +234,10 @@ static void __init gumstix_init(void)
 MACHINE_START(GUMSTIX, "Gumstix")
 	.atag_offset	= 0x100, /* match u-boot bi_boot_params */
 	.map_io		= pxa25x_map_io,
+	.nr_irqs	= PXA_NR_IRQS,
 	.init_irq	= pxa25x_init_irq,
 	.handle_irq	= pxa25x_handle_irq,
-	.timer		= &pxa_timer,
+	.init_time	= pxa_timer_init,
 	.init_machine	= gumstix_init,
 	.restart	= pxa_restart,
 MACHINE_END

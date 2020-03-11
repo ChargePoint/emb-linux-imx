@@ -1,5 +1,5 @@
 /*
-	drivers/net/tulip/tulip.h
+	drivers/net/ethernet/dec/tulip/tulip.h
 
 	Copyright 2000,2001  The Linux Kernel Team
 	Written/copyright 1994-2001 by Donald Becker.
@@ -515,7 +515,7 @@ void comet_timer(unsigned long data);
 extern int tulip_debug;
 extern const char * const medianame[];
 extern const char tulip_media_cap[];
-extern struct tulip_chip_table tulip_tbl[];
+extern const struct tulip_chip_table tulip_tbl[];
 void oom_timer(unsigned long data);
 extern u8 t21040_csr13[];
 

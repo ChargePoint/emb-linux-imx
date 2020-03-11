@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __M32R_LOCAL_H
 #define __M32R_LOCAL_H
 
@@ -12,7 +13,6 @@
 
 #include <linux/percpu.h>
 #include <asm/assembler.h>
-#include <asm/system.h>
 #include <asm/local.h>
 
 /*

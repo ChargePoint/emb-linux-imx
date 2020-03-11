@@ -21,14 +21,15 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_device.h>
 #include <linux/init.h>
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/i2c.h>
-#include <linux/i2c/pmbus.h>
+#include <linux/pmbus.h>
 #include "pmbus.h"
 
-enum chips { ucd9000, ucd90120, ucd90124, ucd9090, ucd90910 };
+enum chips { ucd9000, ucd90120, ucd90124, ucd90160, ucd9090, ucd90910 };
 
 #define UCD9000_MONITOR_CONFIG		0xd5
 #define UCD9000_NUM_PAGES		0xd6
@@ -112,11 +113,41 @@ static const struct i2c_device_id ucd9000_id[] = {
 	{"ucd9000", ucd9000},
 	{"ucd90120", ucd90120},
 	{"ucd90124", ucd90124},
+	{"ucd90160", ucd90160},
 	{"ucd9090", ucd9090},
 	{"ucd90910", ucd90910},
 	{}
 };
 MODULE_DEVICE_TABLE(i2c, ucd9000_id);
+
+static const struct of_device_id ucd9000_of_match[] = {
+	{
+		.compatible = "ti,ucd9000",
+		.data = (void *)ucd9000
+	},
+	{
+		.compatible = "ti,ucd90120",
+		.data = (void *)ucd90120
+	},
+	{
+		.compatible = "ti,ucd90124",
+		.data = (void *)ucd90124
+	},
+	{
+		.compatible = "ti,ucd90160",
+		.data = (void *)ucd90160
+	},
+	{
+		.compatible = "ti,ucd9090",
+		.data = (void *)ucd9090
+	},
+	{
+		.compatible = "ti,ucd90910",
+		.data = (void *)ucd90910
+	},
+	{ },
+};
+MODULE_DEVICE_TABLE(of, ucd9000_of_match);
 
 static int ucd9000_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
@@ -125,6 +156,7 @@ static int ucd9000_probe(struct i2c_client *client,
 	struct ucd9000_data *data;
 	struct pmbus_driver_info *info;
 	const struct i2c_device_id *mid;
+	enum chips chip;
 	int i, ret;
 
 	if (!i2c_check_functionality(client->adapter,
@@ -150,12 +182,18 @@ static int ucd9000_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	if (id->driver_data != ucd9000 && id->driver_data != mid->driver_data)
+	if (client->dev.of_node)
+		chip = (enum chips)of_device_get_match_data(&client->dev);
+	else
+		chip = id->driver_data;
+
+	if (chip != ucd9000 && chip != mid->driver_data)
 		dev_notice(&client->dev,
 			   "Device mismatch: Configured %s, detected %s\n",
 			   id->name, mid->name);
 
-	data = kzalloc(sizeof(struct ucd9000_data), GFP_KERNEL);
+	data = devm_kzalloc(&client->dev, sizeof(struct ucd9000_data),
+			    GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 	info = &data->info;
@@ -164,13 +202,12 @@ static int ucd9000_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(&client->dev,
 			"Failed to read number of active pages\n");
-		goto out;
+		return ret;
 	}
 	info->pages = ret;
 	if (!info->pages) {
 		dev_err(&client->dev, "No pages configured\n");
-		ret = -ENODEV;
-		goto out;
+		return -ENODEV;
 	}
 
 	/* The internal temperature sensor is always active */
@@ -181,8 +218,7 @@ static int ucd9000_probe(struct i2c_client *client,
 					block_buffer);
 	if (ret <= 0) {
 		dev_err(&client->dev, "Failed to read configuration data\n");
-		ret = -ENODEV;
-		goto out;
+		return -ENODEV;
 	}
 	for (i = 0; i < ret; i++) {
 		int page = UCD9000_MON_PAGE(block_buffer[i]);
@@ -218,7 +254,7 @@ static int ucd9000_probe(struct i2c_client *client,
 							UCD9000_FAN_CONFIG,
 							data->fan_data[i]);
 			if (ret < 0)
-				goto out;
+				return ret;
 		}
 		i2c_smbus_write_byte_data(client, UCD9000_FAN_CONFIG_INDEX, 0);
 
@@ -227,49 +263,22 @@ static int ucd9000_probe(struct i2c_client *client,
 		  | PMBUS_HAVE_FAN34 | PMBUS_HAVE_STATUS_FAN34;
 	}
 
-	ret = pmbus_do_probe(client, mid, info);
-	if (ret < 0)
-		goto out;
-	return 0;
-
-out:
-	kfree(data);
-	return ret;
+	return pmbus_do_probe(client, mid, info);
 }
-
-static int ucd9000_remove(struct i2c_client *client)
-{
-	struct ucd9000_data *data;
-
-	data = to_ucd9000_data(pmbus_get_driver_info(client));
-	pmbus_do_remove(client);
-	kfree(data);
-	return 0;
-}
-
 
 /* This is the driver that will be inserted */
 static struct i2c_driver ucd9000_driver = {
 	.driver = {
 		.name = "ucd9000",
+		.of_match_table = of_match_ptr(ucd9000_of_match),
 	},
 	.probe = ucd9000_probe,
-	.remove = ucd9000_remove,
+	.remove = pmbus_do_remove,
 	.id_table = ucd9000_id,
 };
 
-static int __init ucd9000_init(void)
-{
-	return i2c_add_driver(&ucd9000_driver);
-}
-
-static void __exit ucd9000_exit(void)
-{
-	i2c_del_driver(&ucd9000_driver);
-}
+module_i2c_driver(ucd9000_driver);
 
 MODULE_AUTHOR("Guenter Roeck");
 MODULE_DESCRIPTION("PMBus driver for TI UCD90xxx");
 MODULE_LICENSE("GPL");
-module_init(ucd9000_init);
-module_exit(ucd9000_exit);

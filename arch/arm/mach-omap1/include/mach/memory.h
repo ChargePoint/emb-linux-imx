@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * arch/arm/mach-omap1/include/mach/memory.h
  */
@@ -5,10 +6,8 @@
 #ifndef __ASM_ARCH_MEMORY_H
 #define __ASM_ARCH_MEMORY_H
 
-/*
- * Physical DRAM offset.
- */
-#define PLAT_PHYS_OFFSET		UL(0x10000000)
+/* REVISIT: omap1 legacy drivers still rely on this */
+#include <mach/soc.h>
 
 /*
  * Bus address is physical address, except for OMAP-1510 Local Bus.
@@ -18,7 +17,7 @@
  * Note that the is_lbus_device() test is not very efficient on 1510
  * because of the strncmp().
  */
-#ifdef CONFIG_ARCH_OMAP15XX
+#if defined(CONFIG_ARCH_OMAP15XX) && !defined(__ASSEMBLER__)
 
 /*
  * OMAP-1510 Local Bus address offset

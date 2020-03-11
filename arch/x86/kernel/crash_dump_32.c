@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *	Memory preserving reboot related code.
  *
@@ -10,7 +11,7 @@
 #include <linux/highmem.h>
 #include <linux/crash_dump.h>
 
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 static void *kdump_buf_page;
 
@@ -62,16 +63,16 @@ ssize_t copy_oldmem_page(unsigned long pfn, char *buf,
 
 	if (!userbuf) {
 		memcpy(buf, (vaddr + offset), csize);
-		kunmap_atomic(vaddr, KM_PTE0);
+		kunmap_atomic(vaddr);
 	} else {
 		if (!kdump_buf_page) {
 			printk(KERN_WARNING "Kdump: Kdump buffer page not"
 				" allocated\n");
-			kunmap_atomic(vaddr, KM_PTE0);
+			kunmap_atomic(vaddr);
 			return -EFAULT;
 		}
 		copy_page(kdump_buf_page, vaddr);
-		kunmap_atomic(vaddr, KM_PTE0);
+		kunmap_atomic(vaddr);
 		if (copy_to_user(buf, (kdump_buf_page + offset), csize))
 			return -EFAULT;
 	}

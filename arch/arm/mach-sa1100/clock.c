@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/arch/arm/mach-sa1100/clock.c
  */
@@ -15,33 +16,50 @@
 #include <linux/clkdev.h>
 
 #include <mach/hardware.h>
+#include <mach/generic.h>
 
 struct clkops {
 	void			(*enable)(struct clk *);
 	void			(*disable)(struct clk *);
-	unsigned long		(*getrate)(struct clk *);
+	unsigned long		(*get_rate)(struct clk *);
 };
 
 struct clk {
 	const struct clkops	*ops;
-	unsigned long		rate;
 	unsigned int		enabled;
 };
 
-#define INIT_CLKREG(_clk, _devname, _conname)		\
-	{						\
-		.clk		= _clk,			\
-		.dev_id		= _devname,		\
-		.con_id		= _conname,		\
-	}
-
-#define DEFINE_CLK(_name, _ops, _rate)			\
+#define DEFINE_CLK(_name, _ops)				\
 struct clk clk_##_name = {				\
 		.ops	= _ops,				\
-		.rate	= _rate,			\
 	}
 
 static DEFINE_SPINLOCK(clocks_lock);
+
+/* Dummy clk routine to build generic kernel parts that may be using them */
+long clk_round_rate(struct clk *clk, unsigned long rate)
+{
+	return clk_get_rate(clk);
+}
+EXPORT_SYMBOL(clk_round_rate);
+
+int clk_set_rate(struct clk *clk, unsigned long rate)
+{
+	return 0;
+}
+EXPORT_SYMBOL(clk_set_rate);
+
+int clk_set_parent(struct clk *clk, struct clk *parent)
+{
+	return 0;
+}
+EXPORT_SYMBOL(clk_set_parent);
+
+struct clk *clk_get_parent(struct clk *clk)
+{
+	return NULL;
+}
+EXPORT_SYMBOL(clk_get_parent);
 
 static void clk_gpio27_enable(struct clk *clk)
 {
@@ -61,14 +79,29 @@ static void clk_gpio27_disable(struct clk *clk)
 	GAFR &= ~GPIO_32_768kHz;
 }
 
+static void clk_cpu_enable(struct clk *clk)
+{
+}
+
+static void clk_cpu_disable(struct clk *clk)
+{
+}
+
+static unsigned long clk_cpu_get_rate(struct clk *clk)
+{
+	return sa11x0_getspeed(0) * 1000;
+}
+
 int clk_enable(struct clk *clk)
 {
 	unsigned long flags;
 
-	spin_lock_irqsave(&clocks_lock, flags);
-	if (clk->enabled++ == 0)
-		clk->ops->enable(clk);
-	spin_unlock_irqrestore(&clocks_lock, flags);
+	if (clk) {
+		spin_lock_irqsave(&clocks_lock, flags);
+		if (clk->enabled++ == 0)
+			clk->ops->enable(clk);
+		spin_unlock_irqrestore(&clocks_lock, flags);
+	}
 
 	return 0;
 }
@@ -78,24 +111,22 @@ void clk_disable(struct clk *clk)
 {
 	unsigned long flags;
 
-	WARN_ON(clk->enabled == 0);
-
-	spin_lock_irqsave(&clocks_lock, flags);
-	if (--clk->enabled == 0)
-		clk->ops->disable(clk);
-	spin_unlock_irqrestore(&clocks_lock, flags);
+	if (clk) {
+		WARN_ON(clk->enabled == 0);
+		spin_lock_irqsave(&clocks_lock, flags);
+		if (--clk->enabled == 0)
+			clk->ops->disable(clk);
+		spin_unlock_irqrestore(&clocks_lock, flags);
+	}
 }
 EXPORT_SYMBOL(clk_disable);
 
 unsigned long clk_get_rate(struct clk *clk)
 {
-	unsigned long rate;
+	if (clk && clk->ops && clk->ops->get_rate)
+		return clk->ops->get_rate(clk);
 
-	rate = clk->rate;
-	if (clk->ops->getrate)
-		rate = clk->ops->getrate(clk);
-
-	return rate;
+	return 0;
 }
 EXPORT_SYMBOL(clk_get_rate);
 
@@ -104,26 +135,41 @@ const struct clkops clk_gpio27_ops = {
 	.disable	= clk_gpio27_disable,
 };
 
-static void clk_dummy_enable(struct clk *clk) { }
-static void clk_dummy_disable(struct clk *clk) { }
-
-const struct clkops clk_dummy_ops = {
-	.enable		= clk_dummy_enable,
-	.disable	= clk_dummy_disable,
+const struct clkops clk_cpu_ops = {
+	.enable		= clk_cpu_enable,
+	.disable	= clk_cpu_disable,
+	.get_rate	= clk_cpu_get_rate,
 };
 
-static DEFINE_CLK(gpio27, &clk_gpio27_ops, 3686400);
-static DEFINE_CLK(dummy, &clk_dummy_ops, 0);
+static DEFINE_CLK(gpio27, &clk_gpio27_ops);
+
+static DEFINE_CLK(cpu, &clk_cpu_ops);
+
+static unsigned long clk_36864_get_rate(struct clk *clk)
+{
+	return 3686400;
+}
+
+static struct clkops clk_36864_ops = {
+	.enable		= clk_cpu_enable,
+	.disable	= clk_cpu_disable,
+	.get_rate	= clk_36864_get_rate,
+};
+
+static DEFINE_CLK(36864, &clk_36864_ops);
 
 static struct clk_lookup sa11xx_clkregs[] = {
-	INIT_CLKREG(&clk_gpio27, "sa1111.0", NULL),
-	INIT_CLKREG(&clk_dummy, "sa1100-rtc", NULL),
+	CLKDEV_INIT("sa1111.0", NULL, &clk_gpio27),
+	CLKDEV_INIT("sa1100-rtc", NULL, NULL),
+	CLKDEV_INIT("sa11x0-fb", NULL, &clk_cpu),
+	CLKDEV_INIT("sa11x0-pcmcia", NULL, &clk_cpu),
+	/* sa1111 names devices using internal offsets, PCMCIA is at 0x1800 */
+	CLKDEV_INIT("1800", NULL, &clk_cpu),
+	CLKDEV_INIT(NULL, "OSTIMER0", &clk_36864),
 };
 
-static int __init sa11xx_clk_init(void)
+int __init sa11xx_clk_init(void)
 {
 	clkdev_add_table(sa11xx_clkregs, ARRAY_SIZE(sa11xx_clkregs));
 	return 0;
 }
-
-postcore_initcall(sa11xx_clk_init);

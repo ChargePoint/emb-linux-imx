@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/arch/m32r/platforms/oaks32r/setup.c
  *
@@ -11,7 +12,6 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 
-#include <asm/system.h>
 #include <asm/m32r.h>
 #include <asm/io.h>
 

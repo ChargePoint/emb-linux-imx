@@ -19,12 +19,7 @@
 #include <linux/slab.h>
 
 #include <linux/mfd/pcf50633/core.h>
-
-/* Two MBCS registers used during cold start */
-#define PCF50633_REG_MBCS1		0x4b
-#define PCF50633_REG_MBCS2		0x4c
-#define PCF50633_MBCS1_USBPRES 		0x01
-#define PCF50633_MBCS1_ADAPTPRES	0x01
+#include <linux/mfd/pcf50633/mbc.h>
 
 int pcf50633_register_irq(struct pcf50633 *pcf, int irq,
 			void (*handler) (int, void *), void *data)
@@ -60,7 +55,7 @@ EXPORT_SYMBOL_GPL(pcf50633_free_irq);
 static int __pcf50633_irq_mask_set(struct pcf50633 *pcf, int irq, u8 mask)
 {
 	u8 reg, bit;
-	int ret = 0, idx;
+	int idx;
 
 	idx = irq >> 3;
 	reg = PCF50633_REG_INT1M + idx;
@@ -77,7 +72,7 @@ static int __pcf50633_irq_mask_set(struct pcf50633 *pcf, int irq, u8 mask)
 
 	mutex_unlock(&pcf->lock);
 
-	return ret;
+	return 0;
 }
 
 int pcf50633_irq_mask(struct pcf50633 *pcf, int irq)

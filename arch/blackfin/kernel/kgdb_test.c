@@ -12,8 +12,7 @@
 #include <linux/proc_fs.h>
 
 #include <asm/current.h>
-#include <asm/uaccess.h>
-#include <asm/system.h>
+#include <linux/uaccess.h>
 
 #include <asm/blackfin.h>
 

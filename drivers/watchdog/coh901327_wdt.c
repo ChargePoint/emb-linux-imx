@@ -8,17 +8,15 @@
  */
 #include <linux/module.h>
 #include <linux/types.h>
-#include <linux/fs.h>
-#include <linux/miscdevice.h>
 #include <linux/watchdog.h>
 #include <linux/interrupt.h>
 #include <linux/pm.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/bitops.h>
-#include <linux/uaccess.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
+#include <linux/err.h>
 
 #define DRV_NAME "WDOG COH 901 327"
 
@@ -69,20 +67,11 @@
 #define U300_WDOG_IFR_WILL_BARK_IRQ_FORCE_ENABLE			0x0001U
 
 /* Default timeout in seconds = 1 minute */
-static int margin = 60;
-static resource_size_t phybase;
-static resource_size_t physize;
+static unsigned int margin = 60;
 static int irq;
 static void __iomem *virtbase;
-static unsigned long coh901327_users;
-static unsigned long boot_status;
 static struct device *parent;
 
-/*
- * The watchdog block is of course always clocked, the
- * clk_enable()/clk_disable() calls are mainly for performing reference
- * counting higher up in the clock hierarchy.
- */
 static struct clk *clk;
 
 /*
@@ -94,7 +83,6 @@ static void coh901327_enable(u16 timeout)
 	unsigned long freq;
 	unsigned long delay_ns;
 
-	clk_enable(clk);
 	/* Restart timer if it is disabled */
 	val = readw(virtbase + U300_WDOG_D2R);
 	if (val == U300_WDOG_D2R_DISABLE_STATUS_DISABLED)
@@ -122,7 +110,6 @@ static void coh901327_enable(u16 timeout)
 	 */
 	(void) readw(virtbase + U300_WDOG_CR);
 	val = readw(virtbase + U300_WDOG_D2R);
-	clk_disable(clk);
 	if (val != U300_WDOG_D2R_DISABLE_STATUS_ENABLED)
 		dev_err(parent,
 			"%s(): watchdog not enabled! D2R value %04x\n",
@@ -133,7 +120,6 @@ static void coh901327_disable(void)
 {
 	u16 val;
 
-	clk_enable(clk);
 	/* Disable the watchdog interrupt if it is active */
 	writew(0x0000U, virtbase + U300_WDOG_IMR);
 	/* If the watchdog is currently enabled, attempt to disable it */
@@ -148,46 +134,57 @@ static void coh901327_disable(void)
 		       virtbase + U300_WDOG_D2R);
 	}
 	val = readw(virtbase + U300_WDOG_D2R);
-	clk_disable(clk);
 	if (val != U300_WDOG_D2R_DISABLE_STATUS_DISABLED)
 		dev_err(parent,
 			"%s(): watchdog not disabled! D2R value %04x\n",
 			__func__, val);
 }
 
-static void coh901327_start(void)
+static int coh901327_start(struct watchdog_device *wdt_dev)
 {
-	coh901327_enable(margin * 100);
+	coh901327_enable(wdt_dev->timeout * 100);
+	return 0;
 }
 
-static void coh901327_keepalive(void)
+static int coh901327_stop(struct watchdog_device *wdt_dev)
 {
-	clk_enable(clk);
+	coh901327_disable();
+	return 0;
+}
+
+static int coh901327_ping(struct watchdog_device *wdd)
+{
 	/* Feed the watchdog */
 	writew(U300_WDOG_FR_FEED_RESTART_TIMER,
 	       virtbase + U300_WDOG_FR);
-	clk_disable(clk);
+	return 0;
 }
 
-static int coh901327_settimeout(int time)
+static int coh901327_settimeout(struct watchdog_device *wdt_dev,
+				unsigned int time)
 {
-	/*
-	 * Max margin is 327 since the 10ms
-	 * timeout register is max
-	 * 0x7FFF = 327670ms ~= 327s.
-	 */
-	if (time <= 0 || time > 327)
-		return -EINVAL;
-
-	margin = time;
-	clk_enable(clk);
+	wdt_dev->timeout = time;
 	/* Set new timeout value */
-	writew(margin * 100, virtbase + U300_WDOG_TR);
+	writew(time * 100, virtbase + U300_WDOG_TR);
 	/* Feed the dog */
 	writew(U300_WDOG_FR_FEED_RESTART_TIMER,
 	       virtbase + U300_WDOG_FR);
-	clk_disable(clk);
 	return 0;
+}
+
+static unsigned int coh901327_gettimeleft(struct watchdog_device *wdt_dev)
+{
+	u16 val;
+
+	/* Read repeatedly until the value is stable! */
+	val = readw(virtbase + U300_WDOG_CR);
+	while (val & U300_WDOG_CR_VALID_IND)
+		val = readw(virtbase + U300_WDOG_CR);
+	val &= U300_WDOG_CR_COUNT_VALUE_MASK;
+	if (val != 0)
+		val /= 100;
+
+	return val;
 }
 
 /*
@@ -207,218 +204,103 @@ static irqreturn_t coh901327_interrupt(int irq, void *data)
 	 * to prevent a watchdog reset by feeding the watchdog at this
 	 * point.
 	 */
-	clk_enable(clk);
 	val = readw(virtbase + U300_WDOG_IER);
 	if (val == U300_WDOG_IER_WILL_BARK_IRQ_EVENT_IND)
 		writew(U300_WDOG_IER_WILL_BARK_IRQ_ACK_ENABLE,
 		       virtbase + U300_WDOG_IER);
 	writew(0x0000U, virtbase + U300_WDOG_IMR);
-	clk_disable(clk);
 	dev_crit(parent, "watchdog is barking!\n");
 	return IRQ_HANDLED;
 }
 
-/*
- * Allow only one user (daemon) to open the watchdog
- */
-static int coh901327_open(struct inode *inode, struct file *file)
-{
-	if (test_and_set_bit(1, &coh901327_users))
-		return -EBUSY;
-	coh901327_start();
-	return nonseekable_open(inode, file);
-}
-
-static int coh901327_release(struct inode *inode, struct file *file)
-{
-	clear_bit(1, &coh901327_users);
-	coh901327_disable();
-	return 0;
-}
-
-static ssize_t coh901327_write(struct file *file, const char __user *data,
-			       size_t len, loff_t *ppos)
-{
-	if (len)
-		coh901327_keepalive();
-	return len;
-}
-
-static long coh901327_ioctl(struct file *file, unsigned int cmd,
-			    unsigned long arg)
-{
-	int ret = -ENOTTY;
-	u16 val;
-	int time;
-	int new_options;
-	union {
-		struct watchdog_info __user *ident;
-		int __user *i;
-	} uarg;
-	static const struct watchdog_info ident = {
-		.options		= WDIOF_CARDRESET |
-					  WDIOF_SETTIMEOUT |
-					  WDIOF_KEEPALIVEPING,
-		.identity		= "COH 901 327 Watchdog",
-		.firmware_version	= 1,
-	};
-	uarg.i = (int __user *)arg;
-
-	switch (cmd) {
-	case WDIOC_GETSUPPORT:
-		ret = copy_to_user(uarg.ident, &ident,
-				   sizeof(ident)) ? -EFAULT : 0;
-		break;
-
-	case WDIOC_GETSTATUS:
-		ret = put_user(0, uarg.i);
-		break;
-
-	case WDIOC_GETBOOTSTATUS:
-		ret = put_user(boot_status, uarg.i);
-		break;
-
-	case WDIOC_SETOPTIONS:
-		ret = get_user(new_options, uarg.i);
-		if (ret)
-			break;
-		if (new_options & WDIOS_DISABLECARD)
-			coh901327_disable();
-		if (new_options & WDIOS_ENABLECARD)
-			coh901327_start();
-		ret = 0;
-		break;
-
-	case WDIOC_KEEPALIVE:
-		coh901327_keepalive();
-		ret = 0;
-		break;
-
-	case WDIOC_SETTIMEOUT:
-		ret = get_user(time, uarg.i);
-		if (ret)
-			break;
-
-		ret = coh901327_settimeout(time);
-		if (ret)
-			break;
-		/* Then fall through to return set value */
-
-	case WDIOC_GETTIMEOUT:
-		ret = put_user(margin, uarg.i);
-		break;
-
-	case WDIOC_GETTIMELEFT:
-		clk_enable(clk);
-		/* Read repeatedly until the value is stable! */
-		val = readw(virtbase + U300_WDOG_CR);
-		while (val & U300_WDOG_CR_VALID_IND)
-			val = readw(virtbase + U300_WDOG_CR);
-		val &= U300_WDOG_CR_COUNT_VALUE_MASK;
-		clk_disable(clk);
-		if (val != 0)
-			val /= 100;
-		ret = put_user(val, uarg.i);
-		break;
-	}
-	return ret;
-}
-
-static const struct file_operations coh901327_fops = {
-	.owner		= THIS_MODULE,
-	.llseek		= no_llseek,
-	.write		= coh901327_write,
-	.unlocked_ioctl	= coh901327_ioctl,
-	.open		= coh901327_open,
-	.release	= coh901327_release,
+static const struct watchdog_info coh901327_ident = {
+	.options = WDIOF_CARDRESET | WDIOF_SETTIMEOUT | WDIOF_KEEPALIVEPING,
+	.identity = DRV_NAME,
 };
 
-static struct miscdevice coh901327_miscdev = {
-	.minor		= WATCHDOG_MINOR,
-	.name		= "watchdog",
-	.fops		= &coh901327_fops,
+static const struct watchdog_ops coh901327_ops = {
+	.owner = THIS_MODULE,
+	.start = coh901327_start,
+	.stop = coh901327_stop,
+	.ping = coh901327_ping,
+	.set_timeout = coh901327_settimeout,
+	.get_timeleft = coh901327_gettimeleft,
+};
+
+static struct watchdog_device coh901327_wdt = {
+	.info = &coh901327_ident,
+	.ops = &coh901327_ops,
+	/*
+	 * Max timeout is 327 since the 10ms
+	 * timeout register is max
+	 * 0x7FFF = 327670ms ~= 327s.
+	 */
+	.min_timeout = 0,
+	.max_timeout = 327,
 };
 
 static int __exit coh901327_remove(struct platform_device *pdev)
 {
-	misc_deregister(&coh901327_miscdev);
+	watchdog_unregister_device(&coh901327_wdt);
 	coh901327_disable();
 	free_irq(irq, pdev);
+	clk_disable_unprepare(clk);
 	clk_put(clk);
-	iounmap(virtbase);
-	release_mem_region(phybase, physize);
 	return 0;
 }
 
-
 static int __init coh901327_probe(struct platform_device *pdev)
 {
+	struct device *dev = &pdev->dev;
 	int ret;
 	u16 val;
 	struct resource *res;
 
+	parent = dev;
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res)
-		return -ENOENT;
+	virtbase = devm_ioremap_resource(dev, res);
+	if (IS_ERR(virtbase))
+		return PTR_ERR(virtbase);
 
-	parent = &pdev->dev;
-	physize = resource_size(res);
-	phybase = res->start;
-
-	if (request_mem_region(phybase, physize, DRV_NAME) == NULL) {
-		ret = -EBUSY;
-		goto out;
-	}
-
-	virtbase = ioremap(phybase, physize);
-	if (!virtbase) {
-		ret = -ENOMEM;
-		goto out_no_remap;
-	}
-
-	clk = clk_get(&pdev->dev, NULL);
+	clk = clk_get(dev, NULL);
 	if (IS_ERR(clk)) {
 		ret = PTR_ERR(clk);
-		dev_err(&pdev->dev, "could not get clock\n");
-		goto out_no_clk;
+		dev_err(dev, "could not get clock\n");
+		return ret;
 	}
-	ret = clk_enable(clk);
+	ret = clk_prepare_enable(clk);
 	if (ret) {
-		dev_err(&pdev->dev, "could not enable clock\n");
+		dev_err(dev, "could not prepare and enable clock\n");
 		goto out_no_clk_enable;
 	}
 
 	val = readw(virtbase + U300_WDOG_SR);
 	switch (val) {
 	case U300_WDOG_SR_STATUS_TIMED_OUT:
-		dev_info(&pdev->dev,
-			"watchdog timed out since last chip reset!\n");
-		boot_status = WDIOF_CARDRESET;
+		dev_info(dev, "watchdog timed out since last chip reset!\n");
+		coh901327_wdt.bootstatus |= WDIOF_CARDRESET;
 		/* Status will be cleared below */
 		break;
 	case U300_WDOG_SR_STATUS_NORMAL:
-		dev_info(&pdev->dev,
-			"in normal status, no timeouts have occurred.\n");
+		dev_info(dev, "in normal status, no timeouts have occurred.\n");
 		break;
 	default:
-		dev_info(&pdev->dev,
-			"contains an illegal status code (%08x)\n", val);
+		dev_info(dev, "contains an illegal status code (%08x)\n", val);
 		break;
 	}
 
 	val = readw(virtbase + U300_WDOG_D2R);
 	switch (val) {
 	case U300_WDOG_D2R_DISABLE_STATUS_DISABLED:
-		dev_info(&pdev->dev, "currently disabled.\n");
+		dev_info(dev, "currently disabled.\n");
 		break;
 	case U300_WDOG_D2R_DISABLE_STATUS_ENABLED:
-		dev_info(&pdev->dev,
-			 "currently enabled! (disabling it now)\n");
+		dev_info(dev, "currently enabled! (disabling it now)\n");
 		coh901327_disable();
 		break;
 	default:
-		dev_err(&pdev->dev,
-			"contains an illegal enable/disable code (%08x)\n",
+		dev_err(dev, "contains an illegal enable/disable code (%08x)\n",
 			val);
 		break;
 	}
@@ -433,28 +315,24 @@ static int __init coh901327_probe(struct platform_device *pdev)
 		goto out_no_irq;
 	}
 
-	clk_disable(clk);
+	ret = watchdog_init_timeout(&coh901327_wdt, margin, dev);
+	if (ret < 0)
+		coh901327_wdt.timeout = 60;
 
-	ret = misc_register(&coh901327_miscdev);
-	if (ret == 0)
-		dev_info(&pdev->dev,
-			 "initialized. timer margin=%d sec\n", margin);
-	else
+	coh901327_wdt.parent = dev;
+	ret = watchdog_register_device(&coh901327_wdt);
+	if (ret)
 		goto out_no_wdog;
 
+	dev_info(dev, "initialized. timer margin=%d sec\n", margin);
 	return 0;
 
 out_no_wdog:
 	free_irq(irq, pdev);
 out_no_irq:
-	clk_disable(clk);
+	clk_disable_unprepare(clk);
 out_no_clk_enable:
 	clk_put(clk);
-out_no_clk:
-	iounmap(virtbase);
-out_no_remap:
-	release_mem_region(phybase, SZ_4K);
-out:
 	return ret;
 }
 
@@ -518,33 +396,28 @@ void coh901327_watchdog_reset(void)
 	/* Return and await doom */
 }
 
+static const struct of_device_id coh901327_dt_match[] = {
+	{ .compatible = "stericsson,coh901327" },
+	{},
+};
+
 static struct platform_driver coh901327_driver = {
 	.driver = {
-		.owner	= THIS_MODULE,
 		.name	= "coh901327_wdog",
+		.of_match_table = coh901327_dt_match,
 	},
 	.remove		= __exit_p(coh901327_remove),
 	.suspend	= coh901327_suspend,
 	.resume		= coh901327_resume,
 };
 
-static int __init coh901327_init(void)
-{
-	return platform_driver_probe(&coh901327_driver, coh901327_probe);
-}
-module_init(coh901327_init);
-
-static void __exit coh901327_exit(void)
-{
-	platform_driver_unregister(&coh901327_driver);
-}
-module_exit(coh901327_exit);
+module_platform_driver_probe(coh901327_driver, coh901327_probe);
 
 MODULE_AUTHOR("Linus Walleij <linus.walleij@stericsson.com>");
 MODULE_DESCRIPTION("COH 901 327 Watchdog");
 
-module_param(margin, int, 0);
+module_param(margin, uint, 0);
 MODULE_PARM_DESC(margin, "Watchdog margin in seconds (default 60s)");
 
 MODULE_LICENSE("GPL");
-MODULE_ALIAS_MISCDEV(WATCHDOG_MINOR);
+MODULE_ALIAS("platform:coh901327-watchdog");

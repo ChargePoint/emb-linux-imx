@@ -23,7 +23,7 @@
 
 #include "hysdn_defs.h"
 
-unsigned int hynet_enable = 0xffffffff; 
+unsigned int hynet_enable = 0xffffffff;
 module_param(hynet_enable, uint, 0);
 
 #define MAX_SKB_BUFFERS 20	/* number of buffers for keeping TX-data */
@@ -127,7 +127,7 @@ net_send_packet(struct sk_buff *skb, struct net_device *dev)
 	if (lp->in_idx >= MAX_SKB_BUFFERS)
 		lp->in_idx = 0;	/* wrap around */
 	lp->sk_count++;		/* adjust counter */
-	dev->trans_start = jiffies;
+	netif_trans_update(dev);
 
 	/* If we just used up the very last entry in the
 	 * TX ring on this device, tell the queueing
@@ -155,7 +155,7 @@ net_send_packet(struct sk_buff *skb, struct net_device *dev)
 /* completion                                                          */
 /***********************************************************************/
 void
-hysdn_tx_netack(hysdn_card * card)
+hysdn_tx_netack(hysdn_card *card)
 {
 	struct net_local *lp = card->netif;
 
@@ -181,7 +181,7 @@ hysdn_tx_netack(hysdn_card * card)
 /* we got a packet from the network, go and queue it */
 /*****************************************************/
 void
-hysdn_rx_netpkt(hysdn_card * card, unsigned char *buf, unsigned short len)
+hysdn_rx_netpkt(hysdn_card *card, unsigned char *buf, unsigned short len)
 {
 	struct net_local *lp = card->netif;
 	struct net_device *dev;
@@ -201,7 +201,7 @@ hysdn_rx_netpkt(hysdn_card * card, unsigned char *buf, unsigned short len)
 		return;
 	}
 	/* copy the data */
-	memcpy(skb_put(skb, len), buf, len);
+	skb_put_data(skb, buf, len);
 
 	/* determine the used protocol */
 	skb->protocol = eth_type_trans(skb, dev);
@@ -215,7 +215,7 @@ hysdn_rx_netpkt(hysdn_card * card, unsigned char *buf, unsigned short len)
 /* return the pointer to a network packet to be send */
 /*****************************************************/
 struct sk_buff *
-hysdn_tx_netget(hysdn_card * card)
+hysdn_tx_netget(hysdn_card *card)
 {
 	struct net_local *lp = card->netif;
 
@@ -229,11 +229,10 @@ hysdn_tx_netget(hysdn_card * card)
 }				/* hysdn_tx_netget */
 
 static const struct net_device_ops hysdn_netdev_ops = {
-	.ndo_open 		= net_open,
+	.ndo_open		= net_open,
 	.ndo_stop		= net_close,
 	.ndo_start_xmit		= net_send_packet,
-	.ndo_change_mtu		= eth_change_mtu,
-	.ndo_set_mac_address 	= eth_mac_addr,
+	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,
 };
 
@@ -244,13 +243,13 @@ static const struct net_device_ops hysdn_netdev_ops = {
 /* 0 announces success, else a negative error code will be returned.         */
 /*****************************************************************************/
 int
-hysdn_net_create(hysdn_card * card)
+hysdn_net_create(hysdn_card *card)
 {
 	struct net_device *dev;
 	int i;
 	struct net_local *lp;
 
-	if(!card) {
+	if (!card) {
 		printk(KERN_WARNING "No card-pt in hysdn_net_create!\n");
 		return (-ENOMEM);
 	}
@@ -291,7 +290,7 @@ hysdn_net_create(hysdn_card * card)
 /* value 0 announces success, else a negative error code will be returned. */
 /***************************************************************************/
 int
-hysdn_net_release(hysdn_card * card)
+hysdn_net_release(hysdn_card *card)
 {
 	struct net_device *dev = card->netif;
 
@@ -316,7 +315,7 @@ hysdn_net_release(hysdn_card * card)
 /* if the interface is not existing, a "-" is returned.                      */
 /*****************************************************************************/
 char *
-hysdn_net_getname(hysdn_card * card)
+hysdn_net_getname(hysdn_card *card)
 {
 	struct net_device *dev = card->netif;
 

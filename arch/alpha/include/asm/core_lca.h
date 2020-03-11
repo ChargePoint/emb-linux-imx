@@ -1,8 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __ALPHA_LCA__H__
 #define __ALPHA_LCA__H__
 
-#include <asm/system.h>
 #include <asm/compiler.h>
+#include <asm/mce.h>
 
 /*
  * Low Cost Alpha (LCA) definitions (these apply to 21066 and 21068,

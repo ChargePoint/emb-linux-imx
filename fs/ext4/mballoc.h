@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *  fs/ext4/mballoc.h
  *
@@ -23,32 +24,19 @@
 #include "ext4.h"
 
 /*
- * with AGGRESSIVE_CHECK allocator runs consistency checks over
- * structures. these checks slow things down a lot
- */
-#define AGGRESSIVE_CHECK__
-
-/*
- * with DOUBLE_CHECK defined mballoc creates persistent in-core
- * bitmaps, maintains and uses them to check for double allocations
- */
-#define DOUBLE_CHECK__
-
-/*
  */
 #ifdef CONFIG_EXT4_DEBUG
-extern u8 mb_enable_debug;
+extern ushort ext4_mballoc_debug;
 
-#define mb_debug(n, fmt, a...)	                                        \
-	do {								\
-		if ((n) <= mb_enable_debug) {		        	\
-			printk(KERN_DEBUG "(%s, %d): %s: ",		\
-			       __FILE__, __LINE__, __func__);		\
-			printk(fmt, ## a);				\
-		}							\
-	} while (0)
+#define mb_debug(n, fmt, ...)	                                        \
+do {									\
+	if ((n) <= ext4_mballoc_debug) {				\
+		printk(KERN_DEBUG "(%s, %d): %s: " fmt,			\
+		       __FILE__, __LINE__, __func__, ##__VA_ARGS__);	\
+	}								\
+} while (0)
 #else
-#define mb_debug(n, fmt, a...)
+#define mb_debug(n, fmt, ...)	no_printk(fmt, ##__VA_ARGS__)
 #endif
 
 #define EXT4_MB_HISTORY_ALLOC		1	/* allocation */
@@ -63,11 +51,6 @@ extern u8 mb_enable_debug;
  * How long mballoc must look for a best extent
  */
 #define MB_DEFAULT_MIN_TO_SCAN		10
-
-/*
- * How many groups mballoc will scan looking for the best chunk
- */
-#define MB_DEFAULT_MAX_GROUPS_TO_SCAN	5
 
 /*
  * with 'ext4_mb_stats' allocator will collect stats that will be
@@ -96,21 +79,21 @@ extern u8 mb_enable_debug;
 
 
 struct ext4_free_data {
-	/* this links the free block information from group_info */
-	struct rb_node node;
+	/* this links the free block information from sb_info */
+	struct list_head		efd_list;
 
-	/* this links the free block information from ext4_sb_info */
-	struct list_head list;
+	/* this links the free block information from group_info */
+	struct rb_node			efd_node;
 
 	/* group which free block extent belongs */
-	ext4_group_t group;
+	ext4_group_t			efd_group;
 
 	/* free block extent */
-	ext4_grpblk_t start_cluster;
-	ext4_grpblk_t count;
+	ext4_grpblk_t			efd_start_cluster;
+	ext4_grpblk_t			efd_count;
 
 	/* transaction which freed this extent */
-	tid_t	t_tid;
+	tid_t				efd_tid;
 };
 
 struct ext4_prealloc_space {
@@ -178,8 +161,6 @@ struct ext4_allocation_context {
 	/* copy of the best found extent taken before preallocation efforts */
 	struct ext4_free_extent ac_f_ex;
 
-	/* number of iterations done. we have to track to limit searching */
-	unsigned long ac_ex_scanned;
 	__u16 ac_groups_scanned;
 	__u16 ac_found;
 	__u16 ac_tail;
@@ -210,8 +191,6 @@ struct ext4_buddy {
 	__u16 bd_blkbits;
 	ext4_group_t bd_group;
 };
-#define EXT4_MB_BITMAP(e4b)	((e4b)->bd_bitmap)
-#define EXT4_MB_BUDDY(e4b)	((e4b)->bd_buddy)
 
 static inline ext4_fsblk_t ext4_grp_offs_to_block(struct super_block *sb,
 					struct ext4_free_extent *fex)
@@ -219,4 +198,21 @@ static inline ext4_fsblk_t ext4_grp_offs_to_block(struct super_block *sb,
 	return ext4_group_first_block_no(sb, fex->fe_group) +
 		(fex->fe_start << EXT4_SB(sb)->s_cluster_bits);
 }
+
+typedef int (*ext4_mballoc_query_range_fn)(
+	struct super_block		*sb,
+	ext4_group_t			agno,
+	ext4_grpblk_t			start,
+	ext4_grpblk_t			len,
+	void				*priv);
+
+int
+ext4_mballoc_query_range(
+	struct super_block		*sb,
+	ext4_group_t			agno,
+	ext4_grpblk_t			start,
+	ext4_grpblk_t			end,
+	ext4_mballoc_query_range_fn	formatter,
+	void				*priv);
+
 #endif

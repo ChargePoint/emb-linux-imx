@@ -10,7 +10,7 @@
  */
 #include <linux/rwsem.h>
 #include <linux/mutex.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/spinlock.h>
 #include <linux/debug_locks.h>
 
@@ -30,13 +30,14 @@ EXPORT_SYMBOL_GPL(debug_locks);
  * a locking bug is detected.
  */
 int debug_locks_silent;
+EXPORT_SYMBOL_GPL(debug_locks_silent);
 
 /*
  * Generic 'turn off all lock debugging' function:
  */
 int debug_locks_off(void)
 {
-	if (__debug_locks_off()) {
+	if (debug_locks && __debug_locks_off()) {
 		if (!debug_locks_silent) {
 			console_verbose();
 			return 1;
@@ -44,3 +45,4 @@ int debug_locks_off(void)
 	}
 	return 0;
 }
+EXPORT_SYMBOL_GPL(debug_locks_off);

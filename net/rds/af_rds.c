@@ -40,15 +40,6 @@
 
 #include "rds.h"
 
-char *rds_str_array(char **array, size_t elements, size_t index)
-{
-	if ((index < elements) && array[index])
-		return array[index];
-	else
-		return "unknown";
-}
-EXPORT_SYMBOL(rds_str_array);
-
 /* this is just used for stats gathering :/ */
 static DEFINE_SPINLOCK(rds_sock_lock);
 static unsigned long rds_sock_count;
@@ -68,7 +59,6 @@ static int rds_release(struct socket *sock)
 {
 	struct sock *sk = sock->sk;
 	struct rds_sock *rs;
-	unsigned long flags;
 
 	if (!sk)
 		goto out;
@@ -82,22 +72,16 @@ static int rds_release(struct socket *sock)
 	rds_clear_recv_queue(rs);
 	rds_cong_remove_socket(rs);
 
-	/*
-	 * the binding lookup hash uses rcu, we need to
-	 * make sure we sychronize_rcu before we free our
-	 * entry
-	 */
 	rds_remove_bound(rs);
-	synchronize_rcu();
 
 	rds_send_drop_to(rs, NULL);
 	rds_rdma_drop_keys(rs);
 	rds_notify_queue_get(rs, NULL);
 
-	spin_lock_irqsave(&rds_sock_lock, flags);
+	spin_lock_bh(&rds_sock_lock);
 	list_del_init(&rs->rs_item);
 	rds_sock_count--;
-	spin_unlock_irqrestore(&rds_sock_lock, flags);
+	spin_unlock_bh(&rds_sock_lock);
 
 	rds_trans_put(rs->rs_transport);
 
@@ -271,6 +255,76 @@ static int rds_cong_monitor(struct rds_sock *rs, char __user *optval,
 	return ret;
 }
 
+static int rds_set_transport(struct rds_sock *rs, char __user *optval,
+			     int optlen)
+{
+	int t_type;
+
+	if (rs->rs_transport)
+		return -EOPNOTSUPP; /* previously attached to transport */
+
+	if (optlen != sizeof(int))
+		return -EINVAL;
+
+	if (copy_from_user(&t_type, (int __user *)optval, sizeof(t_type)))
+		return -EFAULT;
+
+	if (t_type < 0 || t_type >= RDS_TRANS_COUNT)
+		return -EINVAL;
+
+	rs->rs_transport = rds_trans_get(t_type);
+
+	return rs->rs_transport ? 0 : -ENOPROTOOPT;
+}
+
+static int rds_enable_recvtstamp(struct sock *sk, char __user *optval,
+				 int optlen)
+{
+	int val, valbool;
+
+	if (optlen != sizeof(int))
+		return -EFAULT;
+
+	if (get_user(val, (int __user *)optval))
+		return -EFAULT;
+
+	valbool = val ? 1 : 0;
+
+	if (valbool)
+		sock_set_flag(sk, SOCK_RCVTSTAMP);
+	else
+		sock_reset_flag(sk, SOCK_RCVTSTAMP);
+
+	return 0;
+}
+
+static int rds_recv_track_latency(struct rds_sock *rs, char __user *optval,
+				  int optlen)
+{
+	struct rds_rx_trace_so trace;
+	int i;
+
+	if (optlen != sizeof(struct rds_rx_trace_so))
+		return -EFAULT;
+
+	if (copy_from_user(&trace, optval, sizeof(trace)))
+		return -EFAULT;
+
+	if (trace.rx_traces > RDS_MSG_RX_DGRAM_TRACE_MAX)
+		return -EFAULT;
+
+	rs->rs_rx_traces = trace.rx_traces;
+	for (i = 0; i < rs->rs_rx_traces; i++) {
+		if (trace.rx_trace_pos[i] > RDS_MSG_RX_DGRAM_TRACE_MAX) {
+			rs->rs_rx_traces = 0;
+			return -EFAULT;
+		}
+		rs->rs_rx_trace[i] = trace.rx_trace_pos[i];
+	}
+
+	return 0;
+}
+
 static int rds_setsockopt(struct socket *sock, int level, int optname,
 			  char __user *optval, unsigned int optlen)
 {
@@ -301,6 +355,19 @@ static int rds_setsockopt(struct socket *sock, int level, int optname,
 	case RDS_CONG_MONITOR:
 		ret = rds_cong_monitor(rs, optval, optlen);
 		break;
+	case SO_RDS_TRANSPORT:
+		lock_sock(sock->sk);
+		ret = rds_set_transport(rs, optval, optlen);
+		release_sock(sock->sk);
+		break;
+	case SO_TIMESTAMP:
+		lock_sock(sock->sk);
+		ret = rds_enable_recvtstamp(sock->sk, optval, optlen);
+		release_sock(sock->sk);
+		break;
+	case SO_RDS_MSG_RXPATH_LATENCY:
+		ret = rds_recv_track_latency(rs, optval, optlen);
+		break;
 	default:
 		ret = -ENOPROTOOPT;
 	}
@@ -313,6 +380,7 @@ static int rds_getsockopt(struct socket *sock, int level, int optname,
 {
 	struct rds_sock *rs = rds_sk_to_rs(sock->sk);
 	int ret = -ENOPROTOOPT, len;
+	int trans;
 
 	if (level != SOL_RDS)
 		goto out;
@@ -333,6 +401,19 @@ static int rds_getsockopt(struct socket *sock, int level, int optname,
 			ret = -EINVAL;
 		else
 		if (put_user(rs->rs_recverr, (int __user *) optval) ||
+		    put_user(sizeof(int), optlen))
+			ret = -EFAULT;
+		else
+			ret = 0;
+		break;
+	case SO_RDS_TRANSPORT:
+		if (len < sizeof(int)) {
+			ret = -EINVAL;
+			break;
+		}
+		trans = (rs->rs_transport ? rs->rs_transport->t_type :
+			 RDS_TRANS_NONE); /* unbound */
+		if (put_user(trans, (int __user *)optval) ||
 		    put_user(sizeof(int), optlen))
 			ret = -EFAULT;
 		else
@@ -407,14 +488,22 @@ static const struct proto_ops rds_proto_ops = {
 	.sendpage =	sock_no_sendpage,
 };
 
+static void rds_sock_destruct(struct sock *sk)
+{
+	struct rds_sock *rs = rds_sk_to_rs(sk);
+
+	WARN_ON((&rs->rs_item != rs->rs_item.next ||
+		 &rs->rs_item != rs->rs_item.prev));
+}
+
 static int __rds_create(struct socket *sock, struct sock *sk, int protocol)
 {
-	unsigned long flags;
 	struct rds_sock *rs;
 
 	sock_init_data(sock, sk);
 	sock->ops		= &rds_proto_ops;
 	sk->sk_protocol		= protocol;
+	sk->sk_destruct		= rds_sock_destruct;
 
 	rs = rds_sk_to_rs(sk);
 	spin_lock_init(&rs->rs_lock);
@@ -425,11 +514,12 @@ static int __rds_create(struct socket *sock, struct sock *sk, int protocol)
 	INIT_LIST_HEAD(&rs->rs_cong_list);
 	spin_lock_init(&rs->rs_rdma_lock);
 	rs->rs_rdma_keys = RB_ROOT;
+	rs->rs_rx_traces = 0;
 
-	spin_lock_irqsave(&rds_sock_lock, flags);
+	spin_lock_bh(&rds_sock_lock);
 	list_add_tail(&rs->rs_item, &rds_sock_list);
 	rds_sock_count++;
-	spin_unlock_irqrestore(&rds_sock_lock, flags);
+	spin_unlock_bh(&rds_sock_lock);
 
 	return 0;
 }
@@ -442,7 +532,7 @@ static int rds_create(struct net *net, struct socket *sock, int protocol,
 	if (sock->type != SOCK_SEQPACKET || protocol)
 		return -ESOCKTNOSUPPORT;
 
-	sk = sk_alloc(net, AF_RDS, GFP_ATOMIC, &rds_proto);
+	sk = sk_alloc(net, AF_RDS, GFP_ATOMIC, &rds_proto, kern);
 	if (!sk)
 		return -ENOMEM;
 
@@ -471,12 +561,11 @@ static void rds_sock_inc_info(struct socket *sock, unsigned int len,
 {
 	struct rds_sock *rs;
 	struct rds_incoming *inc;
-	unsigned long flags;
 	unsigned int total = 0;
 
 	len /= sizeof(struct rds_info_message);
 
-	spin_lock_irqsave(&rds_sock_lock, flags);
+	spin_lock_bh(&rds_sock_lock);
 
 	list_for_each_entry(rs, &rds_sock_list, rs_item) {
 		read_lock(&rs->rs_recv_lock);
@@ -492,7 +581,7 @@ static void rds_sock_inc_info(struct socket *sock, unsigned int len,
 		read_unlock(&rs->rs_recv_lock);
 	}
 
-	spin_unlock_irqrestore(&rds_sock_lock, flags);
+	spin_unlock_bh(&rds_sock_lock);
 
 	lens->nr = total;
 	lens->each = sizeof(struct rds_info_message);
@@ -504,11 +593,10 @@ static void rds_sock_info(struct socket *sock, unsigned int len,
 {
 	struct rds_info_socket sinfo;
 	struct rds_sock *rs;
-	unsigned long flags;
 
 	len /= sizeof(struct rds_info_socket);
 
-	spin_lock_irqsave(&rds_sock_lock, flags);
+	spin_lock_bh(&rds_sock_lock);
 
 	if (len < rds_sock_count)
 		goto out;
@@ -529,7 +617,7 @@ out:
 	lens->nr = rds_sock_count;
 	lens->each = sizeof(struct rds_info_socket);
 
-	spin_unlock_irqrestore(&rds_sock_lock, flags);
+	spin_unlock_bh(&rds_sock_lock);
 }
 
 static void rds_exit(void)
@@ -542,18 +630,28 @@ static void rds_exit(void)
 	rds_threads_exit();
 	rds_stats_exit();
 	rds_page_exit();
+	rds_bind_lock_destroy();
 	rds_info_deregister_func(RDS_INFO_SOCKETS, rds_sock_info);
 	rds_info_deregister_func(RDS_INFO_RECV_MESSAGES, rds_sock_inc_info);
 }
 module_exit(rds_exit);
 
+u32 rds_gen_num;
+
 static int rds_init(void)
 {
 	int ret;
 
-	ret = rds_conn_init();
+	net_get_random_once(&rds_gen_num, sizeof(rds_gen_num));
+
+	ret = rds_bind_lock_init();
 	if (ret)
 		goto out;
+
+	ret = rds_conn_init();
+	if (ret)
+		goto out_bind;
+
 	ret = rds_threads_init();
 	if (ret)
 		goto out_conn;
@@ -587,6 +685,8 @@ out_conn:
 	rds_conn_exit();
 	rds_cong_exit();
 	rds_page_exit();
+out_bind:
+	rds_bind_lock_destroy();
 out:
 	return ret;
 }

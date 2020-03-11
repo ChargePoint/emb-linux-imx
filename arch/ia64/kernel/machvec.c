@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/module.h>
 #include <linux/dma-mapping.h>
 #include <asm/machvec.h>
-#include <asm/system.h>
 
 #ifdef CONFIG_IA64_GENERIC
 

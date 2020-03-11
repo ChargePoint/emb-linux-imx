@@ -20,6 +20,7 @@
  */
 
 #include <linux/errno.h>
+#include <linux/err.h>
 #include <linux/sys.h>
 #include <linux/threads.h>
 #include <asm/reg.h>
@@ -30,11 +31,8 @@
 #include <asm/ppc_asm.h>
 #include <asm/asm-offsets.h>
 #include <asm/unistd.h>
-#include <asm/ftrace.h>
 #include <asm/ptrace.h>
-
-#undef SHOW_SYSCALLS
-#undef SHOW_SYSCALLS_TASK
+#include <asm/export.h>
 
 /*
  * MSR_KERNEL is > 0x10000 on 4xx/Book-E since it include MSR_CE.
@@ -44,6 +42,13 @@
 #else
 #define LOAD_MSR_KERNEL(r, x)	li r,(x)
 #endif
+
+/*
+ * Align to 4k in order to ensure that all functions modyfing srr0/srr1
+ * fit into one page in order to not encounter a TLB miss between the
+ * modification of srr0/srr1 and the associated rfi.
+ */
+	.align	12
 
 #ifdef CONFIG_BOOKE
 	.globl	mcheck_transfer_to_handler
@@ -89,6 +94,10 @@ crit_transfer_to_handler:
 	mfspr	r0,SPRN_SRR1
 	stw	r0,_SRR1(r11)
 
+	/* set the stack limit to the current stack
+	 * and set the limit to protect the thread_info
+	 * struct
+	 */
 	mfspr	r8,SPRN_SPRG_THREAD
 	lwz	r0,KSP_LIMIT(r8)
 	stw	r0,SAVED_KSP_LIMIT(r11)
@@ -109,6 +118,10 @@ crit_transfer_to_handler:
 	mfspr	r0,SPRN_SRR1
 	stw	r0,crit_srr1@l(0)
 
+	/* set the stack limit to the current stack
+	 * and set the limit to protect the thread_info
+	 * struct
+	 */
 	mfspr	r8,SPRN_SPRG_THREAD
 	lwz	r0,KSP_LIMIT(r8)
 	stw	r0,saved_ksp_limit@l(0)
@@ -158,7 +171,7 @@ transfer_to_handler:
 	tophys(r11,r11)
 	addi	r11,r11,global_dbcr0@l
 #ifdef CONFIG_SMP
-	rlwinm	r9,r1,0,0,(31-THREAD_SHIFT)
+	CURRENT_THREAD_INFO(r9, r1)
 	lwz	r9,TI_CPU(r9)
 	slwi	r9,r9,3
 	add	r11,r11,r9
@@ -169,6 +182,12 @@ transfer_to_handler:
 	addi	r12,r12,-1
 	stw	r12,4(r11)
 #endif
+#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
+	CURRENT_THREAD_INFO(r9, r1)
+	tophys(r9, r9)
+	ACCOUNT_CPU_USER_ENTRY(r9, r11, r12)
+#endif
+
 	b	3f
 
 2:	/* if from kernel, check interrupted DOZE/NAP mode and
@@ -179,7 +198,7 @@ transfer_to_handler:
 	ble-	stack_ovf		/* then the kernel stack overflowed */
 5:
 #if defined(CONFIG_6xx) || defined(CONFIG_E500)
-	rlwinm	r9,r1,0,0,31-THREAD_SHIFT
+	CURRENT_THREAD_INFO(r9, r1)
 	tophys(r9,r9)			/* check local flags */
 	lwz	r12,TI_LOCAL_FLAGS(r9)
 	mtcrf	0x01,r12
@@ -192,6 +211,9 @@ transfer_to_handler_cont:
 	mflr	r9
 	lwz	r11,0(r9)		/* virtual address of handler */
 	lwz	r9,4(r9)		/* where to go when done */
+#ifdef CONFIG_PPC_8xx_PERF_EVENT
+	mtspr	SPRN_NRI, r0
+#endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	lis	r12,reenable_mmu@h
 	ori	r12,r12,reenable_mmu@l
@@ -206,40 +228,37 @@ reenable_mmu:				/* re-enable mmu so we can */
 	andi.	r10,r10,MSR_EE		/* Did EE change? */
 	beq	1f
 
-	/* Save handler and return address into the 2 unused words
-	 * of the STACK_FRAME_OVERHEAD (sneak sneak sneak). Everything
-	 * else can be recovered from the pt_regs except r3 which for
-	 * normal interrupts has been set to pt_regs and for syscalls
-	 * is an argument, so we temporarily use ORIG_GPR3 to save it
-	 */
-	stw	r9,8(r1)
-	stw	r11,12(r1)
-	stw	r3,ORIG_GPR3(r1)
 	/*
 	 * The trace_hardirqs_off will use CALLER_ADDR0 and CALLER_ADDR1.
 	 * If from user mode there is only one stack frame on the stack, and
 	 * accessing CALLER_ADDR1 will cause oops. So we need create a dummy
 	 * stack frame to make trace_hardirqs_off happy.
+	 *
+	 * This is handy because we also need to save a bunch of GPRs,
+	 * r3 can be different from GPR3(r1) at this point, r9 and r11
+	 * contains the old MSR and handler address respectively,
+	 * r4 & r5 can contain page fault arguments that need to be passed
+	 * along as well. r12, CCR, CTR, XER etc... are left clobbered as
+	 * they aren't useful past this point (aren't syscall arguments),
+	 * the rest is restored from the exception frame.
 	 */
-	andi.	r12,r12,MSR_PR
-	beq	11f
-	stwu	r1,-16(r1)
+	stwu	r1,-32(r1)
+	stw	r9,8(r1)
+	stw	r11,12(r1)
+	stw	r3,16(r1)
+	stw	r4,20(r1)
+	stw	r5,24(r1)
 	bl	trace_hardirqs_off
-	addi	r1,r1,16
-	b	12f
-
-11:
-	bl	trace_hardirqs_off
-12:
+	lwz	r5,24(r1)
+	lwz	r4,20(r1)
+	lwz	r3,16(r1)
+	lwz	r11,12(r1)
+	lwz	r9,8(r1)
+	addi	r1,r1,32
 	lwz	r0,GPR0(r1)
-	lwz	r3,ORIG_GPR3(r1)
-	lwz	r4,GPR4(r1)
-	lwz	r5,GPR5(r1)
 	lwz	r6,GPR6(r1)
 	lwz	r7,GPR7(r1)
 	lwz	r8,GPR8(r1)
-	lwz	r9,8(r1)
-	lwz	r11,12(r1)
 1:	mtctr	r11
 	mtlr	r9
 	bctr				/* jump to handler */
@@ -282,7 +301,9 @@ stack_ovf:
 	lis	r9,StackOverflow@ha
 	addi	r9,r9,StackOverflow@l
 	LOAD_MSR_KERNEL(r10,MSR_KERNEL)
-	FIX_SRR1(r10,r12)
+#ifdef CONFIG_PPC_8xx_PERF_EVENT
+	mtspr	SPRN_NRI, r0
+#endif
 	mtspr	SPRN_SRR0,r9
 	mtspr	SPRN_SRR1,r10
 	SYNC
@@ -302,9 +323,6 @@ _GLOBAL(DoSyscall)
 	lwz	r11,_CCR(r1)	/* Clear SO bit in CR */
 	rlwinm	r11,r11,0,4,2
 	stw	r11,_CCR(r1)
-#ifdef SHOW_SYSCALLS
-	bl	do_show_syscall
-#endif /* SHOW_SYSCALLS */
 #ifdef CONFIG_TRACE_IRQFLAGS
 	/* Return from syscalls can (and generally will) hard enable
 	 * interrupts. You aren't supposed to call a syscall with
@@ -330,9 +348,9 @@ _GLOBAL(DoSyscall)
 	mtmsr	r11
 1:
 #endif /* CONFIG_TRACE_IRQFLAGS */
-	rlwinm	r10,r1,0,0,(31-THREAD_SHIFT)	/* current_thread_info() */
+	CURRENT_THREAD_INFO(r10, r1)
 	lwz	r11,TI_FLAGS(r10)
-	andi.	r11,r11,_TIF_SYSCALL_T_OR_A
+	andi.	r11,r11,_TIF_SYSCALL_DOTRACE
 	bne-	syscall_dotrace
 syscall_dotrace_cont:
 	cmplwi	0,r0,NR_syscalls
@@ -347,19 +365,16 @@ syscall_dotrace_cont:
 	blrl			/* Call handler */
 	.globl	ret_from_syscall
 ret_from_syscall:
-#ifdef SHOW_SYSCALLS
-	bl	do_show_syscall_exit
-#endif
 	mr	r6,r3
-	rlwinm	r12,r1,0,0,(31-THREAD_SHIFT)	/* current_thread_info() */
+	CURRENT_THREAD_INFO(r12, r1)
 	/* disable interrupts so current_thread_info()->flags can't change */
 	LOAD_MSR_KERNEL(r10,MSR_KERNEL)	/* doesn't include MSR_EE */
 	/* Note: We don't bother telling lockdep about it */
 	SYNC
 	MTMSRD(r10)
 	lwz	r9,TI_FLAGS(r12)
-	li	r8,-_LAST_ERRNO
-	andi.	r0,r9,(_TIF_SYSCALL_T_OR_A|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
+	li	r8,-MAX_ERRNO
+	andi.	r0,r9,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
 	bne-	syscall_exit_work
 	cmplw	0,r3,r8
 	blt+	syscall_exit_cont
@@ -401,14 +416,23 @@ BEGIN_FTR_SECTION
 	lwarx	r7,0,r1
 END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	stwcx.	r0,0,r1			/* to clear the reservation */
+#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
+	andi.	r4,r8,MSR_PR
+	beq	3f
+	CURRENT_THREAD_INFO(r4, r1)
+	ACCOUNT_CPU_USER_EXIT(r4, r5, r7)
+3:
+#endif
 	lwz	r4,_LINK(r1)
 	lwz	r5,_CCR(r1)
 	mtlr	r4
 	mtcr	r5
 	lwz	r7,_NIP(r1)
-	FIX_SRR1(r8, r0)
 	lwz	r2,GPR2(r1)
 	lwz	r1,GPR1(r1)
+#ifdef CONFIG_PPC_8xx_PERF_EVENT
+	mtspr	SPRN_NRI, r0
+#endif
 	mtspr	SPRN_SRR0,r7
 	mtspr	SPRN_SRR1,r8
 	SYNC
@@ -427,6 +451,17 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 ret_from_fork:
 	REST_NVGPRS(r1)
 	bl	schedule_tail
+	li	r3,0
+	b	ret_from_syscall
+
+	.globl	ret_from_kernel_thread
+ret_from_kernel_thread:
+	REST_NVGPRS(r1)
+	bl	schedule_tail
+	mtlr	r14
+	mr	r3,r15
+	PPC440EP_ERR42
+	blrl
 	li	r3,0
 	b	ret_from_syscall
 
@@ -450,6 +485,10 @@ syscall_dotrace:
 	lwz	r7,GPR7(r1)
 	lwz	r8,GPR8(r1)
 	REST_NVGPRS(r1)
+
+	cmplwi	r0,NR_syscalls
+	/* Return code is already in r3 thanks to do_syscall_trace_enter() */
+	bge-	ret_from_syscall
 	b	syscall_dotrace_cont
 
 syscall_exit_work:
@@ -485,7 +524,7 @@ syscall_exit_work:
 	subi	r12,r12,TI_FLAGS
 	
 4:	/* Anything which requires enabling interrupts? */
-	andi.	r0,r9,(_TIF_SYSCALL_T_OR_A|_TIF_SINGLESTEP)
+	andi.	r0,r9,(_TIF_SYSCALL_DOTRACE|_TIF_SINGLESTEP)
 	beq	ret_from_except
 
 	/* Re-enable interrupts. There is no need to trace that with
@@ -506,74 +545,6 @@ syscall_exit_work:
 	addi	r3,r1,STACK_FRAME_OVERHEAD
 	bl	do_syscall_trace_leave
 	b	ret_from_except_full
-
-#ifdef SHOW_SYSCALLS
-do_show_syscall:
-#ifdef SHOW_SYSCALLS_TASK
-	lis	r11,show_syscalls_task@ha
-	lwz	r11,show_syscalls_task@l(r11)
-	cmp	0,r2,r11
-	bnelr
-#endif
-	stw	r31,GPR31(r1)
-	mflr	r31
-	lis	r3,7f@ha
-	addi	r3,r3,7f@l
-	lwz	r4,GPR0(r1)
-	lwz	r5,GPR3(r1)
-	lwz	r6,GPR4(r1)
-	lwz	r7,GPR5(r1)
-	lwz	r8,GPR6(r1)
-	lwz	r9,GPR7(r1)
-	bl	printk
-	lis	r3,77f@ha
-	addi	r3,r3,77f@l
-	lwz	r4,GPR8(r1)
-	mr	r5,r2
-	bl	printk
-	lwz	r0,GPR0(r1)
-	lwz	r3,GPR3(r1)
-	lwz	r4,GPR4(r1)
-	lwz	r5,GPR5(r1)
-	lwz	r6,GPR6(r1)
-	lwz	r7,GPR7(r1)
-	lwz	r8,GPR8(r1)
-	mtlr	r31
-	lwz	r31,GPR31(r1)
-	blr
-
-do_show_syscall_exit:
-#ifdef SHOW_SYSCALLS_TASK
-	lis	r11,show_syscalls_task@ha
-	lwz	r11,show_syscalls_task@l(r11)
-	cmp	0,r2,r11
-	bnelr
-#endif
-	stw	r31,GPR31(r1)
-	mflr	r31
-	stw	r3,RESULT(r1)	/* Save result */
-	mr	r4,r3
-	lis	r3,79f@ha
-	addi	r3,r3,79f@l
-	bl	printk
-	lwz	r3,RESULT(r1)
-	mtlr	r31
-	lwz	r31,GPR31(r1)
-	blr
-
-7:	.string	"syscall %d(%x, %x, %x, %x, %x, "
-77:	.string	"%x), current=%p\n"
-79:	.string	" -> %x\n"
-	.align	2,0
-
-#ifdef SHOW_SYSCALLS_TASK
-	.data
-	.globl	show_syscalls_task
-show_syscalls_task:
-	.long	-1
-	.text
-#endif
-#endif /* SHOW_SYSCALLS */
 
 /*
  * The fork/clone functions need to copy the full register set into
@@ -622,6 +593,10 @@ ppc_swapcontext:
 handle_page_fault:
 	stw	r4,_DAR(r1)
 	addi	r3,r1,STACK_FRAME_OVERHEAD
+#ifdef CONFIG_6xx
+	andis.  r0,r5,DSISR_DABRMATCH@h
+	bne-    handle_dabr_fault
+#endif
 	bl	do_page_fault
 	cmpwi	r3,0
 	beq+	ret_from_except
@@ -634,6 +609,17 @@ handle_page_fault:
 	lwz	r4,_DAR(r1)
 	bl	bad_page_fault
 	b	ret_from_except_full
+
+#ifdef CONFIG_6xx
+	/* We have a data breakpoint exception - handle it */
+handle_dabr_fault:
+	SAVE_NVGPRS(r1)
+	lwz	r0,_TRAP(r1)
+	clrrwi	r0,r0,1
+	stw	r0,_TRAP(r1)
+	bl      do_break
+	b	ret_from_except_full
+#endif
 
 /*
  * This routine switches between two different tasks.  The process
@@ -697,7 +683,6 @@ END_FTR_SECTION_IFSET(CPU_FTR_SPE)
 #endif /* CONFIG_SMP */
 
 	tophys(r0,r4)
-	CLR_TOP32(r0)
 	mtspr	SPRN_SPRG_THREAD,r0	/* Update current THREAD phys addr */
 	lwz	r1,KSP(r4)	/* Load new stack pointer */
 
@@ -742,6 +727,9 @@ fast_exception_return:
 	lwz	r10,_LINK(r11)
 	mtlr	r10
 	REST_GPR(10, r11)
+#ifdef CONFIG_PPC_8xx_PERF_EVENT
+	mtspr	SPRN_NRI, r0
+#endif
 	mtspr	SPRN_SRR1,r9
 	mtspr	SPRN_SRR0,r12
 	REST_GPR(9, r11)
@@ -812,7 +800,7 @@ ret_from_except:
 
 user_exc_return:		/* r10 contains MSR_KERNEL here */
 	/* Check current_thread_info()->flags */
-	rlwinm	r9,r1,0,0,(31-THREAD_SHIFT)
+	CURRENT_THREAD_INFO(r9, r1)
 	lwz	r9,TI_FLAGS(r9)
 	andi.	r0,r9,_TIF_USER_WORK_MASK
 	bne	do_work
@@ -825,20 +813,61 @@ restore_user:
 	andis.	r10,r0,DBCR0_IDM@h
 	bnel-	load_dbcr0
 #endif
+#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
+	CURRENT_THREAD_INFO(r9, r1)
+	ACCOUNT_CPU_USER_EXIT(r9, r10, r11)
+#endif
 
-#ifdef CONFIG_PREEMPT
 	b	restore
 
 /* N.B. the only way to get here is from the beq following ret_from_except. */
 resume_kernel:
+	/* check current_thread_info, _TIF_EMULATE_STACK_STORE */
+	CURRENT_THREAD_INFO(r9, r1)
+	lwz	r8,TI_FLAGS(r9)
+	andis.	r0,r8,_TIF_EMULATE_STACK_STORE@h
+	beq+	1f
+
+	addi	r8,r1,INT_FRAME_SIZE	/* Get the kprobed function entry */
+
+	lwz	r3,GPR1(r1)
+	subi	r3,r3,INT_FRAME_SIZE	/* dst: Allocate a trampoline exception frame */
+	mr	r4,r1			/* src:  current exception frame */
+	mr	r1,r3			/* Reroute the trampoline frame to r1 */
+
+	/* Copy from the original to the trampoline. */
+	li	r5,INT_FRAME_SIZE/4	/* size: INT_FRAME_SIZE */
+	li	r6,0			/* start offset: 0 */
+	mtctr	r5
+2:	lwzx	r0,r6,r4
+	stwx	r0,r6,r3
+	addi	r6,r6,4
+	bdnz	2b
+
+	/* Do real store operation to complete stwu */
+	lwz	r5,GPR1(r1)
+	stw	r8,0(r5)
+
+	/* Clear _TIF_EMULATE_STACK_STORE flag */
+	lis	r11,_TIF_EMULATE_STACK_STORE@h
+	addi	r5,r9,TI_FLAGS
+0:	lwarx	r8,0,r5
+	andc	r8,r8,r11
+#ifdef CONFIG_IBM405_ERR77
+	dcbt	0,r5
+#endif
+	stwcx.	r8,0,r5
+	bne-	0b
+1:
+
+#ifdef CONFIG_PREEMPT
 	/* check current_thread_info->preempt_count */
-	rlwinm	r9,r1,0,0,(31-THREAD_SHIFT)
 	lwz	r0,TI_PREEMPT(r9)
 	cmpwi	0,r0,0		/* if non-zero, just restore regs and return */
 	bne	restore
-	lwz	r0,TI_FLAGS(r9)
-	andi.	r0,r0,_TIF_NEED_RESCHED
+	andi.	r8,r8,_TIF_NEED_RESCHED
 	beq+	restore
+	lwz	r3,_MSR(r1)
 	andi.	r0,r3,MSR_EE	/* interrupts off? */
 	beq	restore		/* don't schedule if so */
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -849,7 +878,7 @@ resume_kernel:
 	bl	trace_hardirqs_off
 #endif
 1:	bl	preempt_schedule_irq
-	rlwinm	r9,r1,0,0,(31-THREAD_SHIFT)
+	CURRENT_THREAD_INFO(r9, r1)
 	lwz	r3,TI_FLAGS(r9)
 	andi.	r0,r3,_TIF_NEED_RESCHED
 	bne-	1b
@@ -859,8 +888,6 @@ resume_kernel:
 	 */
 	bl	trace_hardirqs_on
 #endif
-#else
-resume_kernel:
 #endif /* CONFIG_PREEMPT */
 
 	/* interrupts are hard-disabled at this point */
@@ -951,7 +978,9 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	.globl exc_exit_restart
 exc_exit_restart:
 	lwz	r12,_NIP(r1)
-	FIX_SRR1(r9,r10)
+#ifdef CONFIG_PPC_8xx_PERF_EVENT
+	mtspr	SPRN_NRI, r0
+#endif
 	mtspr	SPRN_SRR0,r12
 	mtspr	SPRN_SRR1,r9
 	REST_4GPRS(9, r1)
@@ -1119,7 +1148,7 @@ ret_from_debug_exc:
 	lwz	r10,SAVED_KSP_LIMIT(r1)
 	stw	r10,KSP_LIMIT(r9)
 	lwz	r9,THREAD_INFO-THREAD(r9)
-	rlwinm	r10,r1,0,0,(31-THREAD_SHIFT)
+	CURRENT_THREAD_INFO(r10, r1)
 	lwz	r10,TI_PREEMPT(r10)
 	stw	r10,TI_PREEMPT(r9)
 	RESTORE_xSRR(SRR0,SRR1);
@@ -1153,7 +1182,7 @@ load_dbcr0:
 	lis	r11,global_dbcr0@ha
 	addi	r11,r11,global_dbcr0@l
 #ifdef CONFIG_SMP
-	rlwinm	r9,r1,0,0,(31-THREAD_SHIFT)
+	CURRENT_THREAD_INFO(r9, r1)
 	lwz	r9,TI_CPU(r9)
 	slwi	r9,r9,3
 	add	r11,r11,r9
@@ -1194,7 +1223,7 @@ recheck:
 	LOAD_MSR_KERNEL(r10,MSR_KERNEL)
 	SYNC
 	MTMSRD(r10)		/* disable interrupts */
-	rlwinm	r9,r1,0,0,(31-THREAD_SHIFT)
+	CURRENT_THREAD_INFO(r9, r1)
 	lwz	r9,TI_FLAGS(r9)
 	andi.	r0,r9,_TIF_NEED_RESCHED
 	bne-	do_resched
@@ -1213,7 +1242,7 @@ do_user_signal:			/* r10 contains MSR_KERNEL here */
 	stw	r3,_TRAP(r1)
 2:	addi	r3,r1,STACK_FRAME_OVERHEAD
 	mr	r4,r9
-	bl	do_signal
+	bl	do_notify_resume
 	REST_NVGPRS(r1)
 	b	recheck
 
@@ -1294,7 +1323,6 @@ _GLOBAL(enter_rtas)
 1:	tophys(r9,r1)
 	lwz	r8,INT_FRAME_SIZE+4(r9)	/* get return address */
 	lwz	r9,8(r9)	/* original msr value */
-	FIX_SRR1(r9,r0)
 	addi	r1,r1,INT_FRAME_SIZE
 	li	r0,0
 	mtspr	SPRN_SPRG_RTAS,r0
@@ -1308,102 +1336,3 @@ machine_check_in_rtas:
 	/* XXX load up BATs and panic */
 
 #endif /* CONFIG_PPC_RTAS */
-
-#ifdef CONFIG_FUNCTION_TRACER
-#ifdef CONFIG_DYNAMIC_FTRACE
-_GLOBAL(mcount)
-_GLOBAL(_mcount)
-	/*
-	 * It is required that _mcount on PPC32 must preserve the
-	 * link register. But we have r0 to play with. We use r0
-	 * to push the return address back to the caller of mcount
-	 * into the ctr register, restore the link register and
-	 * then jump back using the ctr register.
-	 */
-	mflr	r0
-	mtctr	r0
-	lwz	r0, 4(r1)
-	mtlr	r0
-	bctr
-
-_GLOBAL(ftrace_caller)
-	MCOUNT_SAVE_FRAME
-	/* r3 ends up with link register */
-	subi	r3, r3, MCOUNT_INSN_SIZE
-.globl ftrace_call
-ftrace_call:
-	bl	ftrace_stub
-	nop
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-.globl ftrace_graph_call
-ftrace_graph_call:
-	b	ftrace_graph_stub
-_GLOBAL(ftrace_graph_stub)
-#endif
-	MCOUNT_RESTORE_FRAME
-	/* old link register ends up in ctr reg */
-	bctr
-#else
-_GLOBAL(mcount)
-_GLOBAL(_mcount)
-
-	MCOUNT_SAVE_FRAME
-
-	subi	r3, r3, MCOUNT_INSN_SIZE
-	LOAD_REG_ADDR(r5, ftrace_trace_function)
-	lwz	r5,0(r5)
-
-	mtctr	r5
-	bctrl
-	nop
-
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-	b	ftrace_graph_caller
-#endif
-	MCOUNT_RESTORE_FRAME
-	bctr
-#endif
-
-_GLOBAL(ftrace_stub)
-	blr
-
-#ifdef CONFIG_FUNCTION_GRAPH_TRACER
-_GLOBAL(ftrace_graph_caller)
-	/* load r4 with local address */
-	lwz	r4, 44(r1)
-	subi	r4, r4, MCOUNT_INSN_SIZE
-
-	/* get the parent address */
-	addi	r3, r1, 52
-
-	bl	prepare_ftrace_return
-	nop
-
-	MCOUNT_RESTORE_FRAME
-	/* old link register ends up in ctr reg */
-	bctr
-
-_GLOBAL(return_to_handler)
-	/* need to save return values */
-	stwu	r1, -32(r1)
-	stw	r3, 20(r1)
-	stw	r4, 16(r1)
-	stw	r31, 12(r1)
-	mr	r31, r1
-
-	bl	ftrace_return_to_handler
-	nop
-
-	/* return value has real return address */
-	mtlr	r3
-
-	lwz	r3, 20(r1)
-	lwz	r4, 16(r1)
-	lwz	r31,12(r1)
-	lwz	r1, 0(r1)
-
-	/* Jump back to real return address */
-	blr
-#endif /* CONFIG_FUNCTION_GRAPH_TRACER */
-
-#endif /* CONFIG_MCOUNT */

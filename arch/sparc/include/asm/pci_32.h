@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __SPARC_PCI_H
 #define __SPARC_PCI_H
 
@@ -16,26 +17,11 @@
 
 #define PCI_IRQ_NONE		0xffffffff
 
-static inline void pcibios_penalize_isa_irq(int irq, int active)
-{
-	/* We don't do dynamic PCI IRQ allocation */
-}
-
 /* Dynamic DMA mapping stuff.
  */
 #define PCI_DMA_BUS_IS_PHYS	(0)
 
 struct pci_dev;
-
-#ifdef CONFIG_PCI
-static inline void pci_dma_burst_advice(struct pci_dev *pdev,
-					enum pci_dma_burst_strategy *strat,
-					unsigned long *strategy_parameter)
-{
-	*strat = PCI_DMA_BURST_INFINITY;
-	*strategy_parameter = ~0UL;
-}
-#endif
 
 #endif /* __KERNEL__ */
 
@@ -51,14 +37,6 @@ static inline void pci_dma_burst_advice(struct pci_dev *pdev,
  * MMU to the PCI Host PCI I/O space window which are translated to the low
  * 64Kbytes by the Host controller.
  */
-
-extern void
-pcibios_resource_to_bus(struct pci_dev *dev, struct pci_bus_region *region,
-			struct resource *res);
-
-extern void
-pcibios_bus_to_resource(struct pci_dev *dev, struct resource *res,
-			struct pci_bus_region *region);
 
 static inline int pci_get_legacy_ide_irq(struct pci_dev *dev, int channel)
 {

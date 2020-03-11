@@ -8,11 +8,12 @@
  * as published by the Free Software Foundation; either version
  * 2 of the Licence, or (at your option) any later version.
  */
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
+#include <linux/sched/signal.h>
+
 #include <asm/fpu.h>
 #include <asm/elf.h>
 #include <asm/exceptions.h>
-#include <asm/system.h>
 
 #ifdef CONFIG_LAZY_SAVE_FPU
 struct task_struct *fpu_state_owner;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*!***************************************************************************
 *!
 *! FILE NAME  : i2c.c
@@ -22,7 +23,6 @@
 
 #include <asm/etraxi2c.h>
 
-#include <asm/system.h>
 #include <arch/svinto.h>
 #include <asm/io.h>
 #include <asm/delay.h>

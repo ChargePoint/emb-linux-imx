@@ -1,14 +1,10 @@
-/* -*- c -*- --------------------------------------------------------------- *
- *
- * linux/fs/autofs/init.c
- *
- *  Copyright 1997-1998 Transmeta Corporation -- All Rights Reserved
+/*
+ * Copyright 1997-1998 Transmeta Corporation -- All Rights Reserved
  *
  * This file is part of the Linux kernel and is made available under
  * the terms of the GNU General Public License, version 2, or at your
  * option, any later version, incorporated herein by reference.
- *
- * ------------------------------------------------------------------------- */
+ */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -26,16 +22,17 @@ static struct file_system_type autofs_fs_type = {
 	.mount		= autofs_mount,
 	.kill_sb	= autofs4_kill_sb,
 };
+MODULE_ALIAS_FS("autofs");
 
 static int __init init_autofs4_fs(void)
 {
 	int err;
 
+	autofs_dev_ioctl_init();
+
 	err = register_filesystem(&autofs_fs_type);
 	if (err)
-		return err;
-
-	autofs_dev_ioctl_init();
+		autofs_dev_ioctl_exit();
 
 	return err;
 }

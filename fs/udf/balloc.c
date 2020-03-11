@@ -21,7 +21,6 @@
 
 #include "udfdecl.h"
 
-#include <linux/buffer_head.h>
 #include <linux/bitops.h>
 
 #include "udf_i.h"
@@ -63,15 +62,14 @@ static int __load_block_bitmap(struct super_block *sb,
 			  block_group, nr_groups);
 	}
 
-	if (bitmap->s_block_bitmap[block_group]) {
+	if (bitmap->s_block_bitmap[block_group])
 		return block_group;
-	} else {
-		retval = read_block_bitmap(sb, bitmap, block_group,
-					   block_group);
-		if (retval < 0)
-			return retval;
-		return block_group;
-	}
+
+	retval = read_block_bitmap(sb, bitmap, block_group, block_group);
+	if (retval < 0)
+		return retval;
+
+	return block_group;
 }
 
 static inline int load_block_bitmap(struct super_block *sb,
@@ -105,7 +103,6 @@ static void udf_add_free_space(struct super_block *sb, u16 partition, u32 cnt)
 }
 
 static void udf_bitmap_free_blocks(struct super_block *sb,
-				   struct inode *inode,
 				   struct udf_bitmap *bitmap,
 				   struct kernel_lb_addr *bloc,
 				   uint32_t offset,
@@ -172,7 +169,6 @@ error_return:
 }
 
 static int udf_bitmap_prealloc_blocks(struct super_block *sb,
-				      struct inode *inode,
 				      struct udf_bitmap *bitmap,
 				      uint16_t partition, uint32_t first_block,
 				      uint32_t block_count)
@@ -223,7 +219,6 @@ out:
 }
 
 static int udf_bitmap_new_block(struct super_block *sb,
-				struct inode *inode,
 				struct udf_bitmap *bitmap, uint16_t partition,
 				uint32_t goal, int *err)
 {
@@ -349,7 +344,6 @@ error_return:
 }
 
 static void udf_table_free_blocks(struct super_block *sb,
-				  struct inode *inode,
 				  struct inode *table,
 				  struct kernel_lb_addr *bloc,
 				  uint32_t offset,
@@ -362,7 +356,6 @@ static void udf_table_free_blocks(struct super_block *sb,
 	struct kernel_lb_addr eloc;
 	struct extent_position oepos, epos;
 	int8_t etype;
-	int i;
 	struct udf_inode_info *iinfo;
 
 	mutex_lock(&sbi->s_alloc_mutex);
@@ -429,7 +422,6 @@ static void udf_table_free_blocks(struct super_block *sb,
 		}
 
 		if (epos.bh != oepos.bh) {
-			i = -1;
 			oepos.block = epos.block;
 			brelse(oepos.bh);
 			get_bh(epos.bh);
@@ -455,9 +447,6 @@ static void udf_table_free_blocks(struct super_block *sb,
 		 */
 
 		int adsize;
-		struct short_ad *sad = NULL;
-		struct long_ad *lad = NULL;
-		struct allocExtDesc *aed;
 
 		eloc.logicalBlockNum = start;
 		elen = EXT_RECORDED_ALLOCATED |
@@ -474,102 +463,17 @@ static void udf_table_free_blocks(struct super_block *sb,
 		}
 
 		if (epos.offset + (2 * adsize) > sb->s_blocksize) {
-			unsigned char *sptr, *dptr;
-			int loffset;
-
-			brelse(oepos.bh);
-			oepos = epos;
-
 			/* Steal a block from the extent being free'd */
-			epos.block.logicalBlockNum = eloc.logicalBlockNum;
+			udf_setup_indirect_aext(table, eloc.logicalBlockNum,
+						&epos);
+
 			eloc.logicalBlockNum++;
 			elen -= sb->s_blocksize;
-
-			epos.bh = udf_tread(sb,
-					udf_get_lb_pblock(sb, &epos.block, 0));
-			if (!epos.bh) {
-				brelse(oepos.bh);
-				goto error_return;
-			}
-			aed = (struct allocExtDesc *)(epos.bh->b_data);
-			aed->previousAllocExtLocation =
-				cpu_to_le32(oepos.block.logicalBlockNum);
-			if (epos.offset + adsize > sb->s_blocksize) {
-				loffset = epos.offset;
-				aed->lengthAllocDescs = cpu_to_le32(adsize);
-				sptr = iinfo->i_ext.i_data + epos.offset
-								- adsize;
-				dptr = epos.bh->b_data +
-					sizeof(struct allocExtDesc);
-				memcpy(dptr, sptr, adsize);
-				epos.offset = sizeof(struct allocExtDesc) +
-						adsize;
-			} else {
-				loffset = epos.offset + adsize;
-				aed->lengthAllocDescs = cpu_to_le32(0);
-				if (oepos.bh) {
-					sptr = oepos.bh->b_data + epos.offset;
-					aed = (struct allocExtDesc *)
-						oepos.bh->b_data;
-					le32_add_cpu(&aed->lengthAllocDescs,
-							adsize);
-				} else {
-					sptr = iinfo->i_ext.i_data +
-								epos.offset;
-					iinfo->i_lenAlloc += adsize;
-					mark_inode_dirty(table);
-				}
-				epos.offset = sizeof(struct allocExtDesc);
-			}
-			if (sbi->s_udfrev >= 0x0200)
-				udf_new_tag(epos.bh->b_data, TAG_IDENT_AED,
-					    3, 1, epos.block.logicalBlockNum,
-					    sizeof(struct tag));
-			else
-				udf_new_tag(epos.bh->b_data, TAG_IDENT_AED,
-					    2, 1, epos.block.logicalBlockNum,
-					    sizeof(struct tag));
-
-			switch (iinfo->i_alloc_type) {
-			case ICBTAG_FLAG_AD_SHORT:
-				sad = (struct short_ad *)sptr;
-				sad->extLength = cpu_to_le32(
-					EXT_NEXT_EXTENT_ALLOCDECS |
-					sb->s_blocksize);
-				sad->extPosition =
-					cpu_to_le32(epos.block.logicalBlockNum);
-				break;
-			case ICBTAG_FLAG_AD_LONG:
-				lad = (struct long_ad *)sptr;
-				lad->extLength = cpu_to_le32(
-					EXT_NEXT_EXTENT_ALLOCDECS |
-					sb->s_blocksize);
-				lad->extLocation =
-					cpu_to_lelb(epos.block);
-				break;
-			}
-			if (oepos.bh) {
-				udf_update_tag(oepos.bh->b_data, loffset);
-				mark_buffer_dirty(oepos.bh);
-			} else {
-				mark_inode_dirty(table);
-			}
 		}
 
 		/* It's possible that stealing the block emptied the extent */
-		if (elen) {
-			udf_write_aext(table, &epos, &eloc, elen, 1);
-
-			if (!epos.bh) {
-				iinfo->i_lenAlloc += adsize;
-				mark_inode_dirty(table);
-			} else {
-				aed = (struct allocExtDesc *)epos.bh->b_data;
-				le32_add_cpu(&aed->lengthAllocDescs, adsize);
-				udf_update_tag(epos.bh->b_data, epos.offset);
-				mark_buffer_dirty(epos.bh);
-			}
-		}
+		if (elen)
+			__udf_add_aext(table, &epos, &eloc, elen, 1);
 	}
 
 	brelse(epos.bh);
@@ -581,7 +485,6 @@ error_return:
 }
 
 static int udf_table_prealloc_blocks(struct super_block *sb,
-				     struct inode *inode,
 				     struct inode *table, uint16_t partition,
 				     uint32_t first_block, uint32_t block_count)
 {
@@ -643,7 +546,6 @@ static int udf_table_prealloc_blocks(struct super_block *sb,
 }
 
 static int udf_table_new_block(struct super_block *sb,
-			       struct inode *inode,
 			       struct inode *table, uint16_t partition,
 			       uint32_t goal, int *err)
 {
@@ -743,17 +645,22 @@ void udf_free_blocks(struct super_block *sb, struct inode *inode,
 	struct udf_part_map *map = &UDF_SB(sb)->s_partmaps[partition];
 
 	if (map->s_partition_flags & UDF_PART_FLAG_UNALLOC_BITMAP) {
-		udf_bitmap_free_blocks(sb, inode, map->s_uspace.s_bitmap,
+		udf_bitmap_free_blocks(sb, map->s_uspace.s_bitmap,
 				       bloc, offset, count);
 	} else if (map->s_partition_flags & UDF_PART_FLAG_UNALLOC_TABLE) {
-		udf_table_free_blocks(sb, inode, map->s_uspace.s_table,
+		udf_table_free_blocks(sb, map->s_uspace.s_table,
 				      bloc, offset, count);
 	} else if (map->s_partition_flags & UDF_PART_FLAG_FREED_BITMAP) {
-		udf_bitmap_free_blocks(sb, inode, map->s_fspace.s_bitmap,
+		udf_bitmap_free_blocks(sb, map->s_fspace.s_bitmap,
 				       bloc, offset, count);
 	} else if (map->s_partition_flags & UDF_PART_FLAG_FREED_TABLE) {
-		udf_table_free_blocks(sb, inode, map->s_fspace.s_table,
+		udf_table_free_blocks(sb, map->s_fspace.s_table,
 				      bloc, offset, count);
+	}
+
+	if (inode) {
+		inode_sub_bytes(inode,
+				((sector_t)count) << sb->s_blocksize_bits);
 	}
 }
 
@@ -763,29 +670,34 @@ inline int udf_prealloc_blocks(struct super_block *sb,
 			       uint32_t block_count)
 {
 	struct udf_part_map *map = &UDF_SB(sb)->s_partmaps[partition];
+	int allocated;
 
 	if (map->s_partition_flags & UDF_PART_FLAG_UNALLOC_BITMAP)
-		return udf_bitmap_prealloc_blocks(sb, inode,
-						  map->s_uspace.s_bitmap,
-						  partition, first_block,
-						  block_count);
+		allocated = udf_bitmap_prealloc_blocks(sb,
+						       map->s_uspace.s_bitmap,
+						       partition, first_block,
+						       block_count);
 	else if (map->s_partition_flags & UDF_PART_FLAG_UNALLOC_TABLE)
-		return udf_table_prealloc_blocks(sb, inode,
-						 map->s_uspace.s_table,
-						 partition, first_block,
-						 block_count);
+		allocated = udf_table_prealloc_blocks(sb,
+						      map->s_uspace.s_table,
+						      partition, first_block,
+						      block_count);
 	else if (map->s_partition_flags & UDF_PART_FLAG_FREED_BITMAP)
-		return udf_bitmap_prealloc_blocks(sb, inode,
-						  map->s_fspace.s_bitmap,
-						  partition, first_block,
-						  block_count);
+		allocated = udf_bitmap_prealloc_blocks(sb,
+						       map->s_fspace.s_bitmap,
+						       partition, first_block,
+						       block_count);
 	else if (map->s_partition_flags & UDF_PART_FLAG_FREED_TABLE)
-		return udf_table_prealloc_blocks(sb, inode,
-						 map->s_fspace.s_table,
-						 partition, first_block,
-						 block_count);
+		allocated = udf_table_prealloc_blocks(sb,
+						      map->s_fspace.s_table,
+						      partition, first_block,
+						      block_count);
 	else
 		return 0;
+
+	if (inode && allocated > 0)
+		inode_add_bytes(inode, allocated << sb->s_blocksize_bits);
+	return allocated;
 }
 
 inline int udf_new_block(struct super_block *sb,
@@ -793,25 +705,29 @@ inline int udf_new_block(struct super_block *sb,
 			 uint16_t partition, uint32_t goal, int *err)
 {
 	struct udf_part_map *map = &UDF_SB(sb)->s_partmaps[partition];
+	int block;
 
 	if (map->s_partition_flags & UDF_PART_FLAG_UNALLOC_BITMAP)
-		return udf_bitmap_new_block(sb, inode,
-					   map->s_uspace.s_bitmap,
-					   partition, goal, err);
+		block = udf_bitmap_new_block(sb,
+					     map->s_uspace.s_bitmap,
+					     partition, goal, err);
 	else if (map->s_partition_flags & UDF_PART_FLAG_UNALLOC_TABLE)
-		return udf_table_new_block(sb, inode,
-					   map->s_uspace.s_table,
-					   partition, goal, err);
-	else if (map->s_partition_flags & UDF_PART_FLAG_FREED_BITMAP)
-		return udf_bitmap_new_block(sb, inode,
-					    map->s_fspace.s_bitmap,
+		block = udf_table_new_block(sb,
+					    map->s_uspace.s_table,
 					    partition, goal, err);
+	else if (map->s_partition_flags & UDF_PART_FLAG_FREED_BITMAP)
+		block = udf_bitmap_new_block(sb,
+					     map->s_fspace.s_bitmap,
+					     partition, goal, err);
 	else if (map->s_partition_flags & UDF_PART_FLAG_FREED_TABLE)
-		return udf_table_new_block(sb, inode,
-					   map->s_fspace.s_table,
-					   partition, goal, err);
+		block = udf_table_new_block(sb,
+					    map->s_fspace.s_table,
+					    partition, goal, err);
 	else {
 		*err = -EIO;
 		return 0;
 	}
+	if (inode && block)
+		inode_add_bytes(inode, sb->s_blocksize);
+	return block;
 }

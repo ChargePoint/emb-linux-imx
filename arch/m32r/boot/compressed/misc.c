@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * arch/m32r/boot/compressed/misc.c
  *
@@ -28,7 +29,7 @@ static unsigned long free_mem_ptr;
 static unsigned long free_mem_end_ptr;
 
 #ifdef CONFIG_KERNEL_BZIP2
-static void *memset(void *s, int c, size_t n)
+void *memset(void *s, int c, size_t n)
 {
 	char *ss = s;
 
@@ -39,6 +40,16 @@ static void *memset(void *s, int c, size_t n)
 #endif
 
 #ifdef CONFIG_KERNEL_GZIP
+void *memcpy(void *dest, const void *src, size_t n)
+{
+	char *d = dest;
+	const char *s = src;
+	while (n--)
+		*d++ = *s++;
+
+	return dest;
+}
+
 #define BOOT_HEAP_SIZE             0x10000
 #include "../../../../lib/decompress_inflate.c"
 #endif
@@ -76,6 +87,7 @@ decompress_kernel(int mmu_on, unsigned char *zimage_data,
 	free_mem_end_ptr = free_mem_ptr + BOOT_HEAP_SIZE;
 
 	puts("\nDecompressing Linux... ");
-	decompress(input_data, input_len, NULL, NULL, output_data, NULL, error);
+	__decompress(input_data, input_len, NULL, NULL, output_data, 0,
+			NULL, error);
 	puts("done.\nBooting the kernel.\n");
 }

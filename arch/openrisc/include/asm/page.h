@@ -40,9 +40,6 @@
 
 #ifndef __ASSEMBLY__
 
-#define get_user_page(vaddr)            __get_free_page(GFP_KERNEL)
-#define free_user_page(page, addr)      free_page(addr)
-
 #define clear_page(page)	memset((page), 0, PAGE_SIZE)
 #define copy_page(to, from)	memcpy((to), (from), PAGE_SIZE)
 
@@ -71,9 +68,6 @@ typedef struct page *pgtable_t;
 #define __pgd(x)	((pgd_t) { (x) })
 #define __pgprot(x)	((pgprot_t) { (x) })
 
-extern unsigned long memory_start;
-extern unsigned long memory_end;
-
 #endif /* !__ASSEMBLY__ */
 
 
@@ -87,15 +81,12 @@ extern unsigned long memory_end;
 
 #define virt_to_page(addr) \
 	(mem_map + (((unsigned long)(addr)-PAGE_OFFSET) >> PAGE_SHIFT))
-#define page_to_virt(page) \
-	((((page) - mem_map) << PAGE_SHIFT) + PAGE_OFFSET)
 
 #define page_to_phys(page)      ((dma_addr_t)page_to_pfn(page) << PAGE_SHIFT)
 
 #define pfn_valid(pfn)          ((pfn) < max_mapnr)
 
-#define virt_addr_valid(kaddr)  (((void *)(kaddr) >= (void *)PAGE_OFFSET) && \
-				((void *)(kaddr) < (void *)memory_end))
+#define virt_addr_valid(kaddr)	(pfn_valid(virt_to_pfn(kaddr)))
 
 #endif /* __ASSEMBLY__ */
 

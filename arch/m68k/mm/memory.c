@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/arch/m68k/mm/memory.c
  *
@@ -17,7 +18,6 @@
 #include <asm/segment.h>
 #include <asm/page.h>
 #include <asm/pgalloc.h>
-#include <asm/system.h>
 #include <asm/traps.h>
 #include <asm/machdep.h>
 
@@ -48,9 +48,7 @@ void __init init_pointer_table(unsigned long ptable)
 	}
 
 	PD_MARKBITS(dp) &= ~mask;
-#ifdef DEBUG
-	printk("init_pointer_table: %lx, %x\n", ptable, PD_MARKBITS(dp));
-#endif
+	pr_debug("init_pointer_table: %lx, %x\n", ptable, PD_MARKBITS(dp));
 
 	/* unreserve the page so it's possible to free that page */
 	PD_PAGE(dp)->flags &= ~(1 << PG_reserved);
@@ -204,7 +202,7 @@ static inline void pushcl040(unsigned long paddr)
 void cache_clear (unsigned long paddr, int len)
 {
     if (CPU_IS_COLDFIRE) {
-	flush_cf_bcache(0, DCACHE_MAX_ADDR);
+	clear_cf_bcache(0, DCACHE_MAX_ADDR);
     } else if (CPU_IS_040_OR_060) {
 	int tmp;
 
