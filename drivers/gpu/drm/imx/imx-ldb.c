@@ -169,6 +169,8 @@ static void imx_ldb_ch_set_bus_format(struct imx_ldb_channel *imx_ldb_ch,
 
 	switch (bus_format) {
 	case MEDIA_BUS_FMT_RGB666_1X7X3_SPWG:
+		ldb->ldb_ctrl |= LDB_BIT_MAP_CH0_JEIDA;
+		ldb->ldb_ctrl &= ~LDB_DATA_WIDTH_CH0_24;
 		break;
 	case MEDIA_BUS_FMT_RGB888_1X7X4_SPWG:
 		if (imx_ldb_ch->chno == 0 || dual)
