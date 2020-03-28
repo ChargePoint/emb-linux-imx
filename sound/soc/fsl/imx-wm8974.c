@@ -55,6 +55,50 @@ static const struct snd_soc_dapm_widget imx_wm8974_dapm_widgets[] = {
 	SND_SOC_DAPM_SPK("Ext Spk", NULL),
 };
 
+static int ssi_audmux_config(struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+	int int_port, ext_port;
+	int ret;
+
+	ret = of_property_read_u32(np, "mux-int-port", &int_port);
+	if (ret) {
+		dev_err(&pdev->dev, "mux-int-port missing or invalid\n");
+		return ret;
+	}
+	ret = of_property_read_u32(np, "mux-ext-port", &ext_port);
+	if (ret) {
+		dev_err(&pdev->dev, "mux-ext-port missing or invalid\n");
+		return ret;
+	}
+
+	/*
+	 * The port numbering in the hardware manual starts at 1, while
+	 * the audmux API expects it starts at 0.
+	 */
+	int_port--;
+	ext_port--;
+	ret = imx_audmux_v2_configure_port(ext_port,
+			IMX_AUDMUX_V2_PTCR_SYN |
+			IMX_AUDMUX_V2_PTCR_TFSEL(int_port) |
+			IMX_AUDMUX_V2_PTCR_TCSEL(int_port) |
+			IMX_AUDMUX_V2_PTCR_TFSDIR |
+			IMX_AUDMUX_V2_PTCR_TCLKDIR,
+			IMX_AUDMUX_V2_PDCR_RXDSEL(int_port));
+	if (ret) {
+		dev_err(&pdev->dev, "audmux internal port setup failed\n");
+		return ret;
+	}
+	ret = imx_audmux_v2_configure_port(int_port,
+			IMX_AUDMUX_V2_PTCR_SYN,
+			IMX_AUDMUX_V2_PDCR_RXDSEL(ext_port));
+	if (ret) {
+		dev_err(&pdev->dev, "audmux external port setup failed\n");
+		return ret;
+	}
+	return ret;
+}
+
 static int imx_wm8974_probe(struct platform_device *pdev)
 {
 	struct device_node *ssi_np, *codec_np;
@@ -77,6 +121,15 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto fail;
 	}
+
+	if (strstr(ssi_np->name, "ssi")) {
+		ret = ssi_audmux_config(pdev); /* required for imx6/cpnk */
+		if (ret) {
+			dev_err(&pdev->dev, "failed to configure ssi audmux\n");
+			goto fail;
+		}
+	}
+
 	codec_dev = of_find_i2c_device_by_node(codec_np);
 	if (!codec_dev) {
 		dev_err(&pdev->dev, "failed to find codec platform device\n");
