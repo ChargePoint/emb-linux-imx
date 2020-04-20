@@ -45,7 +45,7 @@ static int imx_wm8974_dai_init(struct snd_soc_pcm_runtime *rtd)
 	ret = snd_soc_dai_set_sysclk(rtd->codec_dai, 0,
 				     data->clk_frequency, SND_SOC_CLOCK_IN);
 	if (ret) {
-		dev_err(dev, "failed to set SYSCLK: %d\n", ret);
+                dev_err(dev, "could not set codec driver clock params\n");
 		return ret;
 	}
 
@@ -107,9 +107,19 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 	struct platform_device *ssi_pdev;
 	struct i2c_client *codec_dev;
 	struct imx_wm8974_data *data = NULL;
+        struct snd_soc_dai_link_component *comp;
 	int ret;
 
 	ssi_np = of_parse_phandle(pdev->dev.of_node, "cpu-dai", 0);
+
+        if (strstr(ssi_np->name, "ssi")) {
+		ret = ssi_audmux_config(pdev); /* required for imx6 ssi */
+		if (ret) {
+			dev_err(&pdev->dev, "fail to configure ssi audmux\n");
+			goto fail;
+		}
+	}
+
 	codec_np = of_parse_phandle(pdev->dev.of_node, "audio-codec", 0);
 	if (!ssi_np || !codec_np) {
 		dev_err(&pdev->dev, "phandle missing or invalid\n");
@@ -123,14 +133,7 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto fail;
 	}
-
-	if (strstr(ssi_np->name, "ssi")) {
-		ret = ssi_audmux_config(pdev); /* required for imx6 ssi connection */
-		if (ret) {
-			dev_err(&pdev->dev, "failed to configure ssi audmux\n");
-			goto fail;
-		}
-	}
+        put_device(&ssi_pdev->dev);
 
 	codec_dev = of_find_i2c_device_by_node(codec_np);
 	if (!codec_dev) {
@@ -144,6 +147,12 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
+        comp = devm_kzalloc(&pdev->dev, 3 * sizeof(*comp), GFP_KERNEL);
+        if (!comp) {
+                ret = -ENOMEM;
+                goto fail;
+        }
+
 	data->codec_clk = devm_clk_get(&codec_dev->dev, NULL);
 	if (IS_ERR(data->codec_clk)) {
 		ret = PTR_ERR(data->codec_clk);
@@ -151,15 +160,24 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 	}
 
 	data->clk_frequency = clk_get_rate(data->codec_clk);
+
+        data->dai.cpus          = &comp[0];
+        data->dai.codecs        = &comp[1];
+        data->dai.platforms     = &comp[2];
+
+        data->dai.num_cpus      = 1;
+        data->dai.num_codecs    = 1;
+        data->dai.num_platforms = 1;
+
 	clk_prepare_enable(data->codec_clk);
 
 	data->dai.name = "HiFi";
 	data->dai.stream_name = "HiFi";
-	data->dai.codec_dai_name = "wm8974-hifi";
-	data->dai.codec_of_node = codec_np;
-	data->dai.cpu_of_node = ssi_np;
-	data->dai.cpu_dai_name = dev_name(&ssi_pdev->dev);
-	data->dai.platform_of_node = ssi_np;
+	data->dai.codecs->dai_name = "wm8974-hifi";
+	data->dai.codecs->of_node = codec_np;
+	data->dai.cpus->of_node = ssi_np;
+	data->dai.cpus->dai_name = dev_name(&ssi_pdev->dev);
+	data->dai.platforms->of_node = ssi_np;
 	data->dai.init = &imx_wm8974_dai_init;
 	data->dai.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 			    SND_SOC_DAIFMT_CBS_CFS;
@@ -182,7 +200,8 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 
 	ret = devm_snd_soc_register_card(&pdev->dev, &data->card);
 	if (ret) {
-		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
+		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n",
+                        ret);
 		goto fail;
 	}
 
