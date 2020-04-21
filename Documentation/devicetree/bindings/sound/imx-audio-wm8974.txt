@@ -1,0 +1,64 @@
+Freescale i.MX audio complex with WM8974 codec
+
+Required properties:
+
+  - compatible		: "fsl,imx-audio-wm8974"
+
+  - model		: The user-visible name of this sound complex
+
+  - ssi-controller	: The phandle of the i.MX SSI controller
+
+  - audio-codec		: The phandle of the wm8974 audio codec
+
+  - audio-routing	: A list of the connections between audio components.
+			  Each entry is a pair of strings, the first being the
+			  connection's sink, the second being the connection's
+			  source. Valid names could be power supplies, wm8974
+			  pins, and the jacks on the board:
+
+			  Power supplies:
+			   * Mic Bias
+
+			  Board connectors:
+			   * Mic Jack
+			   * Line In Jack
+			   * Headphone Jack
+			   * Line Out Jack
+			   * Ext Spk
+
+  - mux-int-port	: The internal port of the i.MX audio muxer (AUDMUX)
+
+  - mux-ext-port	: The external port of the i.MX audio muxer
+
+Note: The AUDMUX port numbering should start at 1, which is consistent with
+hardware manual.
+
+Example:
+
+/* i.MX6q connection with ssi1 */
+sound {
+	compatible = "fsl,imx6q-sabresd-wm8974",
+	"fsl,imx-audio-wm8974";
+	model = "wm8974-audio";
+	cpu-dai = <&ssi1>;
+	audio-codec = <&codec>;
+	audio-routing =
+		"Ext Spk", "MONOOUT",
+		"Mic Jack", "Mic Bias",
+		"Headphone Jack", "MONOOUT";
+	mux-int-port = <1>;
+	mux-ext-port = <4>;
+	status = "okay";
+};
+
+/* i.MX8x connections with sai0 */
+sound {
+	compatible = "fsl,imx-audio-wm8974";
+	model = "wm8974-audio";
+	cpu-dai = <&sai0>;
+	audio-codec = <&wm8974>;
+	audio-routing =
+		"Ext Spk", "MONOOUT",
+		"Mic", "Mic Bias",
+		"MICP", "Mic";
+};
