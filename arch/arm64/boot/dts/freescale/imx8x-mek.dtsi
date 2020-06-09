@@ -17,6 +17,24 @@
 		pinctrl-2 = <&pinctrl_wifi>;
 	};
 
+	lcdif_backlight: lcdif-backlight {
+		compatible = "pwm-backlight";
+		pwms = <&adma_pwm 0 100000 0>;
+
+		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
+				     10 11 12 13 14 15 16 17 18 19
+				     20 21 22 23 24 25 26 27 28 29
+				     30 31 32 33 34 35 36 37 38 39
+				     40 41 42 43 44 45 46 47 48 49
+				     50 51 52 53 54 55 56 57 58 59
+				     60 61 62 63 64 65 66 67 68 69
+				     70 71 72 73 74 75 76 77 78 79
+				     80 81 82 83 84 85 86 87 88 89
+				     90 91 92 93 94 95 96 97 98 99
+				    100>;
+		default-brightness-level = <80>;
+	};
+
 	lvds_backlight0: lvds_backlight@0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_mipi_lvds0 0 100000 0>;
@@ -678,6 +696,12 @@
 	status = "okay";
 };
 
+&adma_pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcdifpwm>;
+	status = "okay";
+};
+
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec1>;
@@ -941,7 +965,7 @@
 	rpc-region = <&encoder_rpc>;
 	reserved-region = <&encoder_reserved>;
 	reg-rpc-system = <0x40000000>;
-	resolution-max = <1920 1080>;
+	resolution-max = <1920 1920>;
 	mbox-names = "enc1_tx0", "enc1_tx1", "enc1_rx";
 	mboxes = <&mu1_m0 0 0
 		  &mu1_m0 0 1
@@ -1422,4 +1446,37 @@
 		>;
 	};
 
+	pinctrl_lcdif: lcdifgrp {
+		fsl,pins = <
+			IMX8QXP_ESAI0_FSR_ADMA_LCDIF_D00	0x00000060
+			IMX8QXP_ESAI0_FST_ADMA_LCDIF_D01	0x00000060
+			IMX8QXP_ESAI0_SCKR_ADMA_LCDIF_D02	0x00000060
+			IMX8QXP_ESAI0_SCKT_ADMA_LCDIF_D03	0x00000060
+			IMX8QXP_ESAI0_TX0_ADMA_LCDIF_D04	0x00000060
+			IMX8QXP_ESAI0_TX1_ADMA_LCDIF_D05	0x00000060
+			IMX8QXP_ESAI0_TX2_RX3_ADMA_LCDIF_D06	0x00000060
+			IMX8QXP_ESAI0_TX3_RX2_ADMA_LCDIF_D07	0x00000060
+			IMX8QXP_ESAI0_TX4_RX1_ADMA_LCDIF_D08	0x00000060
+			IMX8QXP_ESAI0_TX5_RX0_ADMA_LCDIF_D09	0x00000060
+			IMX8QXP_SPDIF0_RX_ADMA_LCDIF_D10	0x00000060
+			IMX8QXP_SPDIF0_TX_ADMA_LCDIF_D11	0x00000060
+			IMX8QXP_SPDIF0_EXT_CLK_ADMA_LCDIF_D12	0x00000060
+			IMX8QXP_SPI3_SCK_ADMA_LCDIF_D13		0x00000060
+			IMX8QXP_SPI3_SDO_ADMA_LCDIF_D14		0x00000060
+			IMX8QXP_SPI3_SDI_ADMA_LCDIF_D15		0x00000060
+			IMX8QXP_UART1_RTS_B_ADMA_LCDIF_D16	0x00000060
+			IMX8QXP_UART1_CTS_B_ADMA_LCDIF_D17	0x00000060
+			IMX8QXP_SPI3_CS0_ADMA_LCDIF_HSYNC	0x00000060
+			IMX8QXP_SPI3_CS1_ADMA_LCDIF_RESET	0x00000060
+			IMX8QXP_MCLK_IN1_ADMA_LCDIF_EN		0x00000060
+			IMX8QXP_MCLK_IN0_ADMA_LCDIF_VSYNC	0x00000060
+			IMX8QXP_MCLK_OUT0_ADMA_LCDIF_CLK	0x00000060
+		>;
+	};
+
+	pinctrl_lcdifpwm: lcdifpwmgrp {
+		fsl,pins = <
+			IMX8QXP_SPI0_CS1_ADMA_LCD_PWM0_OUT	0x00000060
+		>;
+	};
 };
