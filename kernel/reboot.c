@@ -609,8 +609,7 @@ __setup("reboot=", reboot_setup);
 #define BOOT_BIOS_STR		"bios"
 #define BOOT_ACPI_STR		"acpi"
 #define BOOT_EFI_STR		"efi"
-#define BOOT_CF9_FORCE_STR	"cf9_force"
-#define BOOT_CF9_SAFE_STR	"cf9_safe"
+#define BOOT_PCI_STR		"pci"
 
 static ssize_t mode_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -682,10 +681,7 @@ static ssize_t type_show(struct kobject *kobj, struct kobj_attribute *attr, char
 		val = BOOT_EFI_STR;
 		break;
 	case BOOT_CF9_FORCE:
-		val = BOOT_CF9_FORCE_STR;
-		break;
-	case BOOT_CF9_SAFE:
-		val = BOOT_CF9_SAFE_STR;
+		val = BOOT_PCI_STR;
 		break;
 	default:
 		val = REBOOT_UNDEFINED_STR;
@@ -709,10 +705,8 @@ static ssize_t type_store(struct kobject *kobj, struct kobj_attribute *attr,
 		reboot_type = BOOT_ACPI;
 	else if (!strncmp(buf, BOOT_EFI_STR, strlen(BOOT_EFI_STR)))
 		reboot_type = BOOT_EFI;
-	else if (!strncmp(buf, BOOT_CF9_FORCE_STR, strlen(BOOT_CF9_FORCE_STR)))
+	else if (!strncmp(buf, BOOT_PCI_STR, strlen(BOOT_PCI_STR)))
 		reboot_type = BOOT_CF9_FORCE;
-	else if (!strncmp(buf, BOOT_CF9_SAFE_STR, strlen(BOOT_CF9_SAFE_STR)))
-		reboot_type = BOOT_CF9_SAFE;
 	else
 		return -EINVAL;
 
