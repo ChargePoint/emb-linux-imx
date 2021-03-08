@@ -310,6 +310,15 @@ static int psci_sys_reset(struct notifier_block *nb, unsigned long action,
 		 * cookie = 0 (ignored by the implementation)
 		 */
 		invoke_psci_fn(PSCI_FN_NATIVE(1_1, SYSTEM_RESET2), 0, 0, 0);
+	} else if ((reboot_mode == REBOOT_HARD) &&
+		   psci_system_reset2_supported) {
+		/*
+		 * reset_type[31] = 1 (vendor)
+		 * reset_type[30:0] = 2 (SYSTEM_BOARD_RESET)
+		 * cookie = 0 (ignored by the implementation)
+		 */
+		invoke_psci_fn(PSCI_FN_NATIVE(1_1, SYSTEM_RESET2),
+			       (1 << 31) | 2, 0, 0);
 	} else {
 		invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
 	}
