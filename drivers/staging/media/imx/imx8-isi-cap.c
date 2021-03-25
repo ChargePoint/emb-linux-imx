@@ -105,6 +105,14 @@ struct mxc_isi_fmt mxc_isi_out_formats[] = {
 		.memplanes	= 1,
 		.colplanes	= 1,
 		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+	}, {
+		.name		= "BG12",
+		.fourcc		= V4L2_PIX_FMT_SBGGR12,
+		.depth		= { 16 },
+		.color		= MXC_ISI_OUT_FMT_RAW16,
+		.memplanes	= 1,
+		.colplanes	= 1,
+		.mbus_code	= MEDIA_BUS_FMT_SBGGR12_1X12,
 	}
 };
 
