@@ -228,17 +228,16 @@ out:
 }
 
 /*
- * secure_read - copy the  blob data to userspace in hex.
+ * secure_read - copy the blob data eventually to userspace in hex.
  * param[in]: key pointer to key struct
- * param[in]: buffer pointer to user data for creating key
+ * param[in]: buffer pointer to kernel memory for storing key
  * param[in]: buflen is the length of the buffer
- * On success, return to userspace the secure key data size.
+ * On success, return the secure key data size.
  */
-static long secure_read(const struct key *key, char __user *buffer,
+static long secure_read(const struct key *key, char *buffer,
 			 size_t buflen)
 {
-	const struct secure_key_payload *p = NULL;
-	char *ascii_buf;
+	const struct secure_key_payload *p;
 	char *bufp;
 	int i;
 
@@ -247,18 +246,9 @@ static long secure_read(const struct key *key, char __user *buffer,
 		return -EINVAL;
 
 	if (buffer && buflen >= 2 * p->blob_len) {
-		ascii_buf = kmalloc(2 * p->blob_len, GFP_KERNEL);
-		if (!ascii_buf)
-			return -ENOMEM;
-
-		bufp = ascii_buf;
+		bufp = buffer;
 		for (i = 0; i < p->blob_len; i++)
 			bufp = hex_byte_pack(bufp, p->blob[i]);
-		if (copy_to_user(buffer, ascii_buf, 2 * p->blob_len) != 0) {
-			kzfree(ascii_buf);
-			return -EFAULT;
-		}
-		kzfree(ascii_buf);
 	}
 	return 2 * p->blob_len;
 }
