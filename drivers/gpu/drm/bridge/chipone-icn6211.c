@@ -7,6 +7,7 @@
 #include <drm/drm_of.h>
 #include <drm/drm_print.h>
 #include <drm/drm_mipi_dsi.h>
+#include <drm/drm_encoder.h>
 
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
@@ -161,11 +162,11 @@ static void chipone_post_disable(struct drm_bridge *bridge)
 	gpiod_set_value(icn->enable_gpio, 0);
 }
 
-static int chipone_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
+static int chipone_attach(struct drm_bridge *bridge) //, enum drm_bridge_attach_flags flags)
 {
 	struct chipone *icn = bridge_to_chipone(bridge);
 
-	return drm_bridge_attach(bridge->encoder, icn->panel_bridge, bridge, flags);
+	return drm_bridge_attach(bridge->encoder, icn->panel_bridge, bridge/*, flags*/);
 }
 
 static const struct drm_bridge_funcs chipone_bridge_funcs = {
@@ -218,7 +219,7 @@ static int chipone_parse_dt(struct chipone *icn)
 	if (ret)
 		return ret;
 
-	icn->panel_bridge = devm_drm_panel_bridge_add(dev, panel);
+	icn->panel_bridge = devm_drm_panel_bridge_add(dev, panel, DRM_MODE_CONNECTOR_DPI);
 	if (IS_ERR(icn->panel_bridge))
 		return PTR_ERR(icn->panel_bridge);
 
@@ -243,7 +244,6 @@ static int chipone_probe(struct mipi_dsi_device *dsi)
 		return ret;
 
 	icn->bridge.funcs = &chipone_bridge_funcs;
-	icn->bridge.type = DRM_MODE_CONNECTOR_DPI;
 	icn->bridge.of_node = dev->of_node;
 
 	drm_bridge_add(&icn->bridge);
