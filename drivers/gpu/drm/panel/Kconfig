@@ -89,6 +89,16 @@ config DRM_PANEL_SIMPLE
 	  that it can be automatically turned off when the panel goes into a
 	  low power state.
 
+config DRM_PANEL_AMPIRE_AM640480_ICN6211
+	tristate "Ampire 640x480 via ICN6211 Bridge"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for the Ampire 640x480
+	  attached via a ChipOne ICN6211 MIPI-DSI to RGB bridge.  The panel
+	  has a fixed resolution and uses RGB565 pixels.
+
 config DRM_PANEL_ELIDA_KD35T133
 	tristate "Elida KD35T133 panel driver"
 	depends on OF
