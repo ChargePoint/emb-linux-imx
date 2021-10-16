@@ -1,0 +1,54 @@
+Ampire 5.5" 640x480 Panel w/ICN6211 DSI->RGB Bridge
+===================================================
+This panel is a fixed-mode configuration for the
+following topology:
+
+    MIPI-DSI ==> ICN6211 ==> RGB LCD Panel
+         I2C ==> Bridge
+
+Note that the i2c configuration interface is the
+only tested path; using the MIPI-DSI genereric command
+interface has not been shown to work on the target
+platform.
+
+Required properties:
+- compatible: "ampire,am640480-icn6211"
+
+Optional properties:
+- label: a symbolic name for the panel
+- enable-gpios: panel/bridge enable
+- i2c-dev: client for configuring via I2C bus
+
+Required nodes:
+- power-supply: regulator for powering panel/bridge
+- Video port for DSI input
+
+Example
+-------
+dsi {
+	lcd_panel: panel@0 {
+		compatible = "ampire,am640480-icn6211";
+		status = "okay";
+		reg = <0>;
+		pinctrl-0 = <&...>;
+		enable-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+		power-supply = <&reg_lcd_power>;
+		i2c-dev = <&icn6211_i2c>;
+		dsi-lanes = <4>;
+		video-mode = <2>;
+		panel-width-mm = <117>;
+		panel-height-mm = <92>;
+		port@0 {
+			dsim_from_lcdif: endpoint {
+				remote-endpoint: <&lcdif_to_dsim>;
+			};
+		};
+	};
+};
+
+&i2c {
+	icn_6211_i2c: icn6211@2c {
+		compatible = "simple-bus";
+		reg = <0x2c>;
+	};
+};
