@@ -51,6 +51,13 @@
 #define DT_TIMESTAMP3	0x1d
 #define DT_TS_MODE	0x23
 
+#define DT_TS_SECS	0x00
+#define DT_TS_MINUTES	0x01
+#define DT_TS_HOURS	0x02
+#define DT_TS_DAYS	0x03
+#define DT_TS_MONTHS	0x04
+#define DT_TS_YEARS	0x05
+
 /*
  * control registers
  */
@@ -101,9 +108,25 @@
 #define PIN_IO_INTA_OUT	2
 #define PIN_IO_INTA_HIZ	3
 
+#define PIN_IO_TSPM	GENMASK(3, 2)
+#define PIN_IO_TS_DIS		0		/* disabled; input can be left floating */
+#define PIN_IO_TS_INTB		BIT(2)		/* ^INTB output; push-pull */
+#define PIN_IO_TS_CLK		BIT(3)		/* CLK output; push-pull */
+#define PIN_IO_TS_INPUT	BIT(2) | BIT(3) /* input mode */
+
+#define PIN_IO_TSIM		BIT(4)
+#define PIN_IO_TS_CMOS		0		/* CMOS input; ref Vdd; disabled on Vbatt */
+#define PIN_IO_TS_MECH		PIN_IO_TSIM	/* mechanical switch mode; active pullup;
+						 * sampled at 16Hz; operates on Vdd and Vbatt */
+
+#define PIN_IO_TSL		BIT(5)
+#define PIN_IO_TS_ACTIVEH	0		/* active-high */
+#define PIN_IO_TS_ACTIVEL	PIN_IO_TSL	/* active-low */
+
 #define STOP_EN_STOP	BIT(0)
 
 #define RESET_CPR	0xa4
+#define RESET_CTS	0x25
 
 #define NVRAM_SIZE	0x40
 
@@ -116,6 +139,53 @@ struct pcf85x63_config {
 	struct regmap_config regmap;
 	unsigned int num_nvram;
 };
+
+
+/* tamper timestamp interface */
+
+static ssize_t timestamp0_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct pcf85363 *pcf85363 = dev_get_drvdata(dev->parent);
+
+	regmap_write(pcf85363->regmap, CTRL_RESETS, RESET_CTS);
+
+	return count;
+}
+
+static ssize_t timestamp0_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct pcf85363 *pcf85363 = dev_get_drvdata(dev->parent);
+	static time64_t timestamp0 = 0;
+	unsigned char ts[DT_TS_YEARS + 1];
+	struct rtc_time tm  = { 0 };
+	int ret;
+
+	ret = regmap_bulk_read(pcf85363->regmap, DT_TIMESTAMP1, ts, sizeof(ts));
+	if (ret)
+	    return ret;
+
+	ts[DT_TS_SECS] &= 0x7F;
+	tm.tm_sec = bcd2bin(ts[DT_TS_SECS]);
+	ts[DT_TS_MINUTES] &= 0x7F;
+	tm.tm_min = bcd2bin(ts[DT_TS_MINUTES]);
+	ts[DT_TS_HOURS] &= 0x3F;
+	tm.tm_hour = bcd2bin(ts[DT_TS_HOURS]);
+	ts[DT_TS_DAYS] &= 0x3F;
+	tm.tm_mday = bcd2bin(ts[DT_TS_DAYS]);
+	ts[DT_TS_MONTHS] &= 0x1F;
+	tm.tm_mon = bcd2bin(ts[DT_TS_MONTHS]) - 1;
+	tm.tm_year = bcd2bin(ts[DT_TS_YEARS]);
+	/* adjust for 1900 base of rtc_time */
+	tm.tm_year += 100;
+	timestamp0 = rtc_tm_to_time64(&tm);
+
+	return sprintf(buf, "%llu\n", timestamp0);
+};
+
+static DEVICE_ATTR_RW(timestamp0);
 
 static int pcf85363_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
@@ -265,21 +335,35 @@ static int pcf85363_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 
 static irqreturn_t pcf85363_rtc_handle_irq(int irq, void *dev_id)
 {
+	struct device *dev = dev_id;
 	struct pcf85363 *pcf85363 = i2c_get_clientdata(dev_id);
+	irqreturn_t ret = IRQ_NONE;
 	unsigned int flags;
 	int err;
 
 	err = regmap_read(pcf85363->regmap, CTRL_FLAGS, &flags);
-	if (err)
-		return IRQ_NONE;
+
+	if (err) {
+		dev_warn(dev, "Read IRQ Control Register error %d\n", err);
+		return ret;
+	}
 
 	if (flags & FLAGS_A1F) {
 		rtc_update_irq(pcf85363->rtc, 1, RTC_IRQF | RTC_AF);
 		regmap_update_bits(pcf85363->regmap, CTRL_FLAGS, FLAGS_A1F, 0);
-		return IRQ_HANDLED;
+		ret = IRQ_HANDLED;
 	}
 
-	return IRQ_NONE;
+	if (flags & FLAGS_TSR1F) {
+		regmap_update_bits(pcf85363->regmap, CTRL_FLAGS, FLAGS_TSR1F, 0);
+
+		sysfs_notify(&pcf85363->rtc->dev.kobj, NULL,
+			     dev_attr_timestamp0.attr.name);
+
+		ret = IRQ_HANDLED;
+	}
+
+	return ret;
 }
 
 static const struct rtc_class_ops rtc_ops = {
@@ -350,6 +434,15 @@ static const struct pcf85x63_config pcf_85363_config = {
 	.num_nvram = 2
 };
 
+static struct attribute *pcf85363_attrs[] = {
+	&dev_attr_timestamp0.attr,
+	NULL
+};
+
+static const struct attribute_group pcf85363_attr_group = {
+	.attrs	= pcf85363_attrs,
+};
+
 static int pcf85363_probe(struct i2c_client *client,
 			  const struct i2c_device_id *id)
 {
@@ -408,10 +501,43 @@ static int pcf85363_probe(struct i2c_client *client,
 						NULL, pcf85363_rtc_handle_irq,
 						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 						"pcf85363", client);
-		if (ret)
-			dev_warn(&client->dev, "unable to request IRQ, alarms disabled\n");
-		else
+		if (ret == 0) {
 			set_bit(RTC_FEATURE_ALARM, pcf85363->rtc->features);
+			if (of_find_property(client->dev.of_node,
+					     "tamper-detect", NULL) != NULL) {
+
+				/* active-high mechanical switch input (should configure from DT) */
+				ret = regmap_update_bits(pcf85363->regmap, CTRL_PIN_IO,
+							 PIN_IO_TSPM     | PIN_IO_TSIM    | PIN_IO_TSL,
+							 PIN_IO_TS_INPUT | PIN_IO_TS_MECH | PIN_IO_TS_ACTIVEH);
+				if (ret)
+					return ret;
+
+				/* every timestamp update (should configure from DT) */
+				ret = regmap_update_bits(pcf85363->regmap, DT_TS_MODE,
+									 0xFF, 0x02);
+				if (ret)
+					return ret;
+
+				/* enable timestamp interrupt */
+				ret = regmap_update_bits(pcf85363->regmap, CTRL_INTA_EN,
+									 INT_TSRIE, INT_TSRIE);
+				if (ret)
+					return ret;
+
+				ret = rtc_add_group(pcf85363->rtc, &pcf85363_attr_group);
+				if (ret)
+				    return ret;
+
+				dev_info(&client->dev, "tamper enabled\n");
+			}
+
+		} else {
+			dev_warn(&client->dev, "unable to request IRQ, alarms disabled\n");
+		}
+
+		if (ret)
+			return ret;
 	}
 
 	ret = devm_rtc_register_device(pcf85363->rtc);
