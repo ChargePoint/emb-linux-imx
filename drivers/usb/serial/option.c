@@ -1098,7 +1098,7 @@ static const struct usb_device_id option_ids[] = {
 	  .driver_info = NUMEP2 },
 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EC21, 0xff, 0, 0) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EC25, 0xff, 0xff, 0xff),
-	  .driver_info = NUMEP2 },
+	  .driver_info = NUMEP2 | ZLP },
 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EC25, 0xff, 0, 0) },
 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EG95, 0xff, 0xff, 0xff),
 	  .driver_info = NUMEP2 },
@@ -2075,9 +2075,6 @@ static struct usb_serial_driver option_1port_device = {
 #ifdef CONFIG_PM
 	.suspend           = usb_wwan_suspend,
 	.resume            = usb_wwan_resume,
-	//Added for Quectel Modem: VikasG
-	.reset_resume   = usb_wwan_resume,
-
 #endif
 };
 
@@ -2112,19 +2109,6 @@ static int option_probe(struct usb_serial *serial,
 	 */
 	if (device_flags & NUMEP2 && iface_desc->bNumEndpoints != 2)
 		return -ENODEV;
-
-	//Added to ignore Quectel EG25- VikasG
-	//Quectel modules’s interface 4 can be used as USB network device
-	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x2c7c)) {
-		//some interfaces can be used as USB Network device (ecm, rndis, mbim)
-		if (serial->interface->cur_altsetting->desc.bInterfaceClass != 0xFF) {
-			return -ENODEV;
-		}
-		//interface 4 can be used as USB Network device (qmi)
-		else if (serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4) {
-			return -ENODEV;
-		}
-	}
 
 	/* Store the device flags so we can use them during attach. */
 	usb_set_serial_data(serial, (void *)device_flags);
