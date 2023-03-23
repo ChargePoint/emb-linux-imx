@@ -33,6 +33,7 @@
 #define IMX_SIP_TIMER_SET_PRETIME_WDOG	0x07
 
 #define SC_TIMER_WDOG_ACTION_PARTITION	0
+#define SC_TIMER_WDOG_ACTION_COLD	2
 
 #define SC_IRQ_WDOG			1
 #define SC_IRQ_GROUP_WDOG		1
@@ -67,7 +68,7 @@ static int imx_sc_wdt_start(struct watchdog_device *wdog)
 		return -EACCES;
 
 	arm_smccc_smc(IMX_SIP_TIMER, IMX_SIP_TIMER_SET_WDOG_ACT,
-		      SC_TIMER_WDOG_ACTION_PARTITION,
+		      SC_TIMER_WDOG_ACTION_COLD,
 		      0, 0, 0, 0, 0, &res);
 	return res.a0 ? -EACCES : 0;
 }
