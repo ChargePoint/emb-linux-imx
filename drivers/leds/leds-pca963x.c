@@ -32,6 +32,7 @@
 #include <linux/property.h>
 #include <linux/slab.h>
 #include <linux/of.h>
+#include <linux/i2c-pca963x.h>
 
 /* LED select registers determine the source that drives LED outputs */
 #define PCA963X_LED_OFF		0x0	/* LED driver off */
@@ -371,6 +372,14 @@ static const struct of_device_id of_pca963x_match[] = {
 };
 MODULE_DEVICE_TABLE(of, of_pca963x_match);
 
+static struct i2c_client *g_client;
+
+struct i2c_client *i2c_get_pca963x_device(void)
+{
+   return g_client;
+}
+EXPORT_SYMBOL_GPL(i2c_get_pca963x_device);
+
 static int pca963x_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
 {
@@ -397,6 +406,8 @@ static int pca963x_probe(struct i2c_client *client,
 	mutex_init(&chip->mutex);
 	chip->chipdef = chipdef;
 	chip->client = client;
+
+    g_client = client;
 
 	/* Turn off LEDs by default*/
 	for (i = 0; i < chipdef->n_leds / 4; i++)

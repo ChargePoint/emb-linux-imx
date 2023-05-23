@@ -19,6 +19,14 @@ config LEDS_TRIGGER_TIMER
 
 	  If unsure, say Y.
 
+config LEDS_TRIGGER_GRPPWM
+	tristate "LED Group PWM trigger"
+	help
+	  This allows LEDs to be controlled by group pwm feature,
+          supported by pca9633 i2c driver
+
+          if unsure, say Y.
+
 config LEDS_TRIGGER_ONESHOT
 	tristate "LED One-shot Trigger"
 	help
