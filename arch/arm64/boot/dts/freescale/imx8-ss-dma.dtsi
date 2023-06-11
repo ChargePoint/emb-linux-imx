@@ -12,6 +12,14 @@ dma_subsys: bus@5a000000 {
 	#size-cells = <1>;
 	ranges = <0x5a000000 0x0 0x5a000000 0x1000000>;
 
+        reg_1v8: fixed-regulator {
+                compatible = "regulator-fixed";
+                regulator-name = "1V8";
+                regulator-min-microvolt = <1800000>;
+                regulator-max-microvolt = <1800000>;
+                regulator-always-on;
+        };
+
 	dma_ipg_clk: clock-dma-ipg {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
