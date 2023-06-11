@@ -505,6 +505,7 @@ dma_subsys: bus@5a000000 {
 		clock-output-names = "adc0_lpcg_clk",
 				     "adc0_lpcg_ipg_clk";
 		power-domains = <&pd IMX_SC_R_ADC_0>;
+                vref-supply = <&reg_1v8>;
 	};
 
 	adc1_lpcg: clock-controller@5ac90000 {
