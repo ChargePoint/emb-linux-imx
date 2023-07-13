@@ -466,6 +466,9 @@ static void i2c_imx_dma_callback(void *arg)
 	struct imx_i2c_struct *i2c_imx = (struct imx_i2c_struct *)arg;
 	struct imx_i2c_dma *dma = i2c_imx->dma;
 
+    if(dma->dma_transfer_dir == DMA_DEV_TO_MEM)
+      dma_sync_single_for_device(&i2c_imx->adapter.dev, dma->dma_buf, dma->dma_len, dma->dma_transfer_dir);
+
 	dma_unmap_single(dma->chan_using->device->dev, dma->dma_buf,
 			dma->dma_len, dma->dma_data_dir);
 	complete(&dma->cmd_complete);
@@ -485,6 +488,9 @@ static int i2c_imx_dma_xfer(struct imx_i2c_struct *i2c_imx,
 		dev_err(dev, "DMA mapping failed\n");
 		goto err_map;
 	}
+
+    if(dma->dma_transfer_dir == DMA_MEM_TO_DEV)
+      dma_sync_single_for_device(dev, dma->dma_buf, dma->dma_len, dma->dma_transfer_dir);
 
 	txdesc = dmaengine_prep_slave_single(dma->chan_using, dma->dma_buf,
 					dma->dma_len, dma->dma_transfer_dir,
