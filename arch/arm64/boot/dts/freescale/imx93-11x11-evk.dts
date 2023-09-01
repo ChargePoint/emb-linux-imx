@@ -360,6 +360,11 @@
 	pinctrl-1 = <&pinctrl_lpi2c1>;
 	status = "okay";
 
+	pcf85363a: rtc@51 {
+			compatible = "nxp,pcf85363";
+			reg = <0x51>;
+			status = "okay";
+			#clock-cells = <0>;
 
 	};
 
