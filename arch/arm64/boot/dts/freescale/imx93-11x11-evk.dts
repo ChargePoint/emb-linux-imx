@@ -777,9 +777,11 @@
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1>;
 	pinctrl-2 = <&pinctrl_usdhc1>;
-	bus-width = <8>;
+	bus-width = <4>;
 	non-removable;
 	status = "okay";
+	no-mmc-hs400;
+	max-frequency = <100000000>;
 };
 
 &usdhc2 {
