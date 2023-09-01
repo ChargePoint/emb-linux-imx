@@ -227,6 +227,12 @@
 	};
 };
 
+&gpio4 {
+	// pinctrl-names = "default";
+	// pinctrl-0 = <&pinctrl_gpio4>;
+	gpio-line-names = "0", "1", "2", "3", "ioexp_en";
+};
+
 &sai1 {
 	#sound-dai-cells = <0>;
 	pinctrl-names = "default";
@@ -365,6 +371,54 @@
 			reg = <0x51>;
 			status = "okay";
 			#clock-cells = <0>;
+	};
+
+	ioexp0: gpio@74 {
+		compatible = "nxp,tca9539";
+		reg = <0x74>;
+		reset-gpios = <&gpio4 4 GPIO_ACTIVE_LOW>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		gpio-line-names =	"WIFI_PWR_OK",
+							"WIFI_PWR_EN",
+							"CAN1_DISABLE",
+							"CAN2_DISABLE",
+							"STATUS_LED_EN",
+							"LCD_PWR_OK",
+							"LCD_PWR_EN",
+							"LCD_EN",
+							"nc",
+							"RFID_ENABLE",
+							"SPI2_ENABLE",
+							"HMI_PWR_OK",
+							"HMI_PWR_EN",
+							"CHG_CAPGOOD",
+							"CHGn_PFW",
+							"CHG_ENABLE";
+	};
+
+	ioexp1: gpio@75 {
+		compatible = "nxp,tca9539";
+		reg = <0x75>;
+		reset-gpios = <&gpio4 4 GPIO_ACTIVE_LOW>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		gpio-line-names =	"DEBUG0",
+							"DEBUG1",
+							"DEBUG2",
+							"DEBUG3",
+							"APP_GPIO1",
+							"APP_GPIO2",
+							"APP_GPIO3",
+							"nc",
+							"BT_EN",
+							"WIFI_EN",
+							"nc",
+							"nc",
+							"SPI2_RSTn",
+							"FLEXSPI_RSTn",
+							"nc",
+							"nc";
 
 	};
 
