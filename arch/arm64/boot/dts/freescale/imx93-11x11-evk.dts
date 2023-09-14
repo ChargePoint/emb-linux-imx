@@ -295,12 +295,18 @@
 	status = "disabled";
 };
 
-&flexcan2 {
+&flexcan1 { /* console */
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_can2_stby>;
+	pinctrl-0 = <&pinctrl_flexcan1>;
 	status = "okay";
 };
+
+#&flexcan2 { /* console */
+#	pinctrl-names = "default";
+#	pinctrl-0 = <&pinctrl_flexcan2>;
+#	status = "okay";
+#};
+
 
 &eqos {
 	pinctrl-names = "default";
@@ -324,9 +330,9 @@
 };
 
 &fec {
-	// pinctrl-names = "default";
-	// pinctrl-0 = <&pinctrl_fec>;
-	phy-mode = "rgmii-id";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec>;
+	phy-mode = "rmii";
 	phy-handle = <&ethphy2>;
 	fsl,magic-packet;
 	status = "okay";
@@ -743,6 +749,7 @@
 	};
 };
 
+
 &media_blk_ctrl {
 	status = "okay";
 };
@@ -837,12 +844,21 @@
 };
 
 &iomuxc {
-	pinctrl_flexcan2: flexcan2grp {
+	pinctrl_flexcan1: flexcan1grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO25__CAN2_TX	0x139e
-			MX93_PAD_GPIO_IO27__CAN2_RX	0x139e
+			MX93_PAD_PDM_CLK__CAN1_TX	        0x139e
+			MX93_PAD_PDM_BIT_STREAM0__CAN1_RX	0x139e
 		>;
 	};
+
+# These are wrong, recheck after 2nd spin of board is available.
+#	pinctrl_flexcan2: flexcan2grp {
+#		fsl,pins = <
+#			MX93_PAD_ENET2_TD3__FLEXIO2_FLEXIO16	0x139e
+#			MX93_PAD_ENET2_TD2__FLEXIO2_FLEXIO17	0x139e
+#		>;
+#	};
+
 
 	pinctrl_lpi2c1: lpi2c1grp {
 		fsl,pins = <
@@ -889,18 +905,14 @@
 		fsl,pins = <
 			MX93_PAD_ENET2_MDC__ENET1_MDC			0x57e
 			MX93_PAD_ENET2_MDIO__ENET1_MDIO			0x57e
-			MX93_PAD_ENET2_RD0__ENET1_RGMII_RD0		0x57e
-			MX93_PAD_ENET2_RD1__ENET1_RGMII_RD1		0x57e
-			MX93_PAD_ENET2_RD2__ENET1_RGMII_RD2		0x57e
-			MX93_PAD_ENET2_RD3__ENET1_RGMII_RD3		0x57e
-			MX93_PAD_ENET2_RXC__ENET1_RGMII_RXC		0x5fe
-			MX93_PAD_ENET2_RX_CTL__ENET1_RGMII_RX_CTL	0x57e
+			MX93_PAD_ENET2_TX_CTL__ENET1_RGMII_TX_CTL	0x57e
 			MX93_PAD_ENET2_TD0__ENET1_RGMII_TD0		0x57e
 			MX93_PAD_ENET2_TD1__ENET1_RGMII_TD1		0x57e
-			MX93_PAD_ENET2_TD2__ENET1_RGMII_TD2		0x57e
-			MX93_PAD_ENET2_TD3__ENET1_RGMII_TD3		0x57e
-			MX93_PAD_ENET2_TXC__ENET1_RGMII_TXC		0x5fe
-			MX93_PAD_ENET2_TX_CTL__ENET1_RGMII_TX_CTL	0x57e
+`			MX93_PAD_ENET2_TD2__ENET1_RGMII_TD2		0x57e
+			MX93_PAD_ENET2_RXC__ENET1_RGMII_RXC		0x5fe
+			MX93_PAD_ENET2_RX_CTL__ENET1_RGMII_RX_CTL	0x57e
+`			MX93_PAD_ENET2_RD0__ENET1_RGMII_RD0		0x57e
+			MX93_PAD_ENET2_RD1__ENET1_RGMII_RD1		0x57e
 		>;
 	};
 
