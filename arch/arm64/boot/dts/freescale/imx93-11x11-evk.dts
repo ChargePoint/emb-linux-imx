@@ -18,7 +18,7 @@
 	compatible = "fsl,imx93-11x11-evk", "fsl,imx93";
 
 	chosen {
-		stdout-path = &lpuart1;
+		stdout-path = &lpuart3;
 	};
 
 	reserved-memory {
@@ -195,7 +195,7 @@
 		#sound-dai-cells = <1>;
 		compatible = "linux,bt-sco";
 	};
-
+/*
 	sound-bt-sco {
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "bt-sco-audio";
@@ -225,6 +225,7 @@
 			};
 		};
 	};
+*/
 };
 
 &gpio4 {
@@ -232,7 +233,7 @@
 	// pinctrl-0 = <&pinctrl_gpio4>;
 	gpio-line-names = "0", "1", "2", "3", "ioexp_en";
 };
-
+/*
 &sai1 {
 	#sound-dai-cells = <0>;
 	pinctrl-names = "default";
@@ -252,7 +253,7 @@
 	fsl,sai-mclk-direction-output;
 	status = "okay";
 };
-
+*/
 &micfil {
 	#sound-dai-cells = <0>;
 	pinctrl-names = "default";
@@ -400,7 +401,7 @@
 	ioexp1: gpio@75 {
 		compatible = "nxp,tca9539";
 		reg = <0x75>;
-		reset-gpios = <&gpio4 4 GPIO_ACTIVE_LOW>;
+		//reset-gpios = <&gpio4 4 GPIO_ACTIVE_LOW>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		gpio-line-names =	"DEBUG0",
@@ -721,7 +722,7 @@
 &lpuart1 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
-	status = "okay";
+	status = "disabled";
 };
 
 &lpuart3 { /* console */
@@ -801,6 +802,38 @@
 	status = "okay";
 	no-sdio;
 	no-mmc;
+};
+
+&lpspi1 {
+	fsl,spi-num-chipselects = <1>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_lpspi1>;
+	pinctrl-1 = <&pinctrl_lpspi1>;
+	cs-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+	//pinctrl-assert-gpios = <&adp5585gpio 4 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	spidev0: spi@0 {
+		reg = <0>;
+		compatible = "lwn,bk4";
+		spi-max-frequency = <1000000>;
+	};
+};
+
+&lpspi2 {
+	fsl,spi-num-chipselects = <1>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_lpspi2>;
+	pinctrl-1 = <&pinctrl_lpspi2>;
+	cs-gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
+	//pinctrl-assert-gpios = <&adp5585gpio 4 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	spidev1: spi@0 {
+		reg = <0>;
+		compatible = "lwn,bk4";
+		spi-max-frequency = <1000000>;
+	};
 };
 
 &iomuxc {
@@ -933,7 +966,7 @@
 			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT	0x51e
 		>;
 	};
-
+/*
 	pinctrl_sai1: sai1grp {
 		fsl,pins = <
 			MX93_PAD_SAI1_TXC__SAI1_TX_BCLK			0x31e
@@ -952,7 +985,7 @@
 			MX93_PAD_GPIO_IO20__SAI3_RX_DATA00		0x31e
 		>;
 	};
-
+*/
 	pinctrl_pdm: pdmgrp {
 		fsl,pins = <
 			MX93_PAD_PDM_CLK__PDM_CLK			0x31e
@@ -965,6 +998,24 @@
 		fsl,pins = <
 			MX93_PAD_GPIO_IO22__SPDIF_IN		0x31e
 			MX93_PAD_GPIO_IO23__SPDIF_OUT		0x31e
+		>;
+	};
+
+	pinctrl_lpspi1: lpspi1grp {
+		fsl,pins = <
+			MX93_PAD_SAI1_TXFS__GPIO1_IO11		0x3fe
+			MX93_PAD_SAI1_TXC__LPSPI1_SIN		0x3fe
+			MX93_PAD_SAI1_RXD0__LPSPI1_SOUT		0x3fe
+			MX93_PAD_SAI1_TXD0__LPSPI1_SCK		0x3fe
+		>;
+	};
+
+	pinctrl_lpspi2: lpspi2grp {
+		fsl,pins = <
+			MX93_PAD_UART1_TXD__GPIO1_IO05		0x3fe
+			MX93_PAD_UART1_RXD__LPSPI2_SIN		0x3fe
+			MX93_PAD_UART2_RXD__LPSPI2_SOUT		0x3fe
+			MX93_PAD_UART2_TXD__LPSPI2_SCK		0x3fe
 		>;
 	};
 };
