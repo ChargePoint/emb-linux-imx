@@ -19,6 +19,22 @@
 
 	chosen {
 		stdout-path = &lpuart3;
+
+		/*#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		framebuffer@a4120000 {
+    		compatible = "simple-framebuffer";
+    		reg = <0 0xa4120000 0 0x39000>;
+    		width = <320>;
+    		height = <240>;
+    		stride = <640>;
+			bits-per-pixel = <16>;
+    		format = "r5g6b5";
+    		status = "okay";
+			display = <&display0>;
+		};*/
 	};
 
 	reserved-memory {
@@ -71,9 +87,19 @@
 			no-map;
 		};
 
-		ele_reserved: ele-reserved@a4120000 {
+		/*framebuffer: fb-reserved@a4120000 {
+			reg = <0 0xa4120000 0 0x39000>;
+			no-map;
+		};*/
+
+		framebuffer: fb-reserved@a4120000 {
+			reg = <0 0xa4120000 0 0x960000>;
+			no-map;
+		};
+
+		ele_reserved: ele-reserved@a4150000 {
 			compatible = "shared-dma-pool";
-			reg = <0 0xa4120000 0 0x100000>;
+			reg = <0 0xa4A80000 0 0x100000>;
 			no-map;
 		};
 	};
@@ -85,7 +111,7 @@
 			  &mu1 1 1
 			  &mu1 3 1>;
 		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
+				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>, <&framebuffer>;
 		fsl,startup-delay-ms = <500>;
 	};
 
@@ -102,6 +128,39 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		gpio = <&ioexp0 4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_lcd_en: regulator-lcd-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-en";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&ioexp0 7 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_lcd_pwr_enable: regulator-lcd-pwr-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-pwr-enable";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&ioexp0 6 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_lcd_backlight: regulator-lcd-backlight{
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-backlight";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio2 21 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		regulator-boot-on;
 		regulator-always-on;
@@ -134,7 +193,7 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 	};
-
+			
 	reg_dvdd_sel: regulator-dvdd_sel {
 		compatible = "regulator-fixed";
 		regulator-name = "DVDD_SEL";
@@ -179,7 +238,7 @@
 		regulator-name = "VAA_SEL";
 		// gpio = <&adp5585gpio_isp 1 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-	};
+			};
 
 	reg_avdd_2v8: regulator-avdd {
 		compatible = "regulator-fixed";
@@ -195,6 +254,45 @@
 		#sound-dai-cells = <1>;
 		compatible = "linux,bt-sco";
 	};
+
+	panel {
+		compatible = "panel-simple";
+		//power-supply = <&ioexp0 6 GPIO_ACTIVE_HIGH>;
+		//enable-gpios = <&pcal6524 22 GPIO_ACTIVE_HIGH>;
+        //enable-gpios = <&ioexp0 7 GPIO_ACTIVE_HIGH>;
+		width = <320>;
+        height = <240>;
+        refresh-rate = <60>;
+		status = "okay";
+
+		/*port {
+			panel_in: endpoint {
+				remote-endpoint = <&display_out>;
+			};
+		};*/
+	};
+
+	fb0: framebuffer@a4120000 {
+    	compatible = "simple-framebuffer";
+    	//reg = <0 0xa4120000 0 0x39000>;
+		reg = <0 0xa4120000 0 0x960000>;
+    	width = <320>;
+    	height = <240>;
+    	stride = <640>;
+		bits-per-pixel = <16>;
+    	format = "r5g6b5";
+    	status = "okay";
+		display = <&display0>;
+		mode = <&timing0>;
+		clocks = <&clk IMX93_CLK_MEDIA_DISP_PIX>,
+				 <&clk IMX93_CLK_MEDIA_AXI>,
+				 <&clk IMX93_CLK_LCDIF_GATE>;
+	};
+
+	/*pxp_v4l2_out {
+		compatible = "fsl,imx7d-pxp-v4l2", "fsl,imx6sx-pxp-v4l2", "fsl,imx6sl-pxp-v4l2";
+		status = "okay";
+	};*/
 /*
 	sound-bt-sco {
 		compatible = "simple-audio-card";
@@ -342,11 +440,6 @@
 			eee-broken-1000t;
 		};
 	};
-};
-
-&lcdif {
-	status = "okay";
-	assigned-clock-rates = <445333333>, <148444444>, <400000000>, <133333333>;
 };
 
 &lpm {
@@ -743,10 +836,6 @@
 	};
 };
 
-&media_blk_ctrl {
-	status = "okay";
-};
-
 &mu1 {
 	status = "okay";
 };
@@ -835,6 +924,63 @@
 		spi-max-frequency = <1000000>;
 	};
 };
+
+&media_blk_ctrl {
+	status = "okay";
+};
+
+&lcdif {
+    assigned-clock-rates = <150000000>, <30000000>, <400000000>, <133333333>;
+    enable_backlight = <&reg_lcd_backlight>;
+    enable_lcd_pwr = <&reg_lcd_pwr_enable>;
+    enable_lcd = <&reg_lcd_en>;
+    display = <&display0>;
+    status = "okay";
+    //fbmem = <0xa4120000 0x960000>;
+	//pinctrl-0 = <&pinctrl_lcdif>;
+	//fsl,fb = <&fb0>;
+
+	display0: display0 {
+		bits-per-pixel = <16>;
+		bus-width = <24>;
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <6000000>;
+				hactive = <320>;
+				vactive = <240>;
+				hback-porch = <43>;
+				hfront-porch = <8>;
+				vback-porch = <12>;
+				vfront-porch = <8>;
+				hsync-len = <0>;
+				vsync-len = <0>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+		};
+	};
+};
+
+&parallel_disp_fmt {
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_lcdif>;
+    fsl,interface-pix-fmt = "rgb565";
+	compatible = "simple-framebuffer";
+    status = "okay";
+
+    /*ports {
+        port@1 {
+            reg = <1>;
+            display_out: endpoint {
+                remote-endpoint = <&panel_in>;
+            };
+        };
+    };*/
+};
+
 
 &iomuxc {
 	pinctrl_flexcan2: flexcan2grp {
@@ -1018,6 +1164,31 @@
 			MX93_PAD_UART2_TXD__LPSPI2_SCK		0x3fe
 		>;
 	};
+
+	pinctrl_lcdif: lcdifgrp {
+        fsl,pins = <
+		    MX93_PAD_GPIO_IO00__MEDIAMIX_DISP_CLK	 0x31e
+			MX93_PAD_GPIO_IO01__MEDIAMIX_DISP_DE     0x31e
+            MX93_PAD_GPIO_IO07__MEDIAMIX_DISP_DATA03 0x31e
+            MX93_PAD_GPIO_IO08__MEDIAMIX_DISP_DATA04 0x31e
+            MX93_PAD_GPIO_IO09__MEDIAMIX_DISP_DATA05 0x31e
+            MX93_PAD_GPIO_IO10__MEDIAMIX_DISP_DATA06 0x31e
+            MX93_PAD_GPIO_IO11__MEDIAMIX_DISP_DATA07 0x31e
+            MX93_PAD_GPIO_IO14__MEDIAMIX_DISP_DATA10 0x31e
+            MX93_PAD_GPIO_IO15__MEDIAMIX_DISP_DATA11 0x31e
+            MX93_PAD_GPIO_IO16__MEDIAMIX_DISP_DATA12 0x31e
+            MX93_PAD_GPIO_IO17__MEDIAMIX_DISP_DATA13 0x31e
+            MX93_PAD_GPIO_IO18__MEDIAMIX_DISP_DATA14 0x31e
+            MX93_PAD_GPIO_IO19__MEDIAMIX_DISP_DATA15 0x31e
+            MX93_PAD_GPIO_IO23__MEDIAMIX_DISP_DATA19 0x31e
+            MX93_PAD_GPIO_IO24__MEDIAMIX_DISP_DATA20 0x31e
+            MX93_PAD_GPIO_IO25__MEDIAMIX_DISP_DATA21 0x31e
+            MX93_PAD_GPIO_IO26__MEDIAMIX_DISP_DATA22 0x31e
+            MX93_PAD_GPIO_IO27__MEDIAMIX_DISP_DATA23 0x31e
+            MX93_PAD_GPIO_IO03__MEDIAMIX_DISP_HSYNC  0x31e
+            MX93_PAD_GPIO_IO02__MEDIAMIX_DISP_VSYNC  0x31e
+        >;
+    };
 };
 
 &epxp {
