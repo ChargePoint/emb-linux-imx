@@ -19,22 +19,6 @@
 
 	chosen {
 		stdout-path = &lpuart3;
-
-		/*#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		framebuffer@a4120000 {
-    		compatible = "simple-framebuffer";
-    		reg = <0 0xa4120000 0 0x39000>;
-    		width = <320>;
-    		height = <240>;
-    		stride = <640>;
-			bits-per-pixel = <16>;
-    		format = "r5g6b5";
-    		status = "okay";
-			display = <&display0>;
-		};*/
 	};
 
 	reserved-memory {
@@ -93,6 +77,7 @@
 		};*/
 
 		framebuffer: fb-reserved@a4120000 {
+			compatible = "shared-dma-pool";
 			reg = <0 0xa4120000 0 0x960000>;
 			no-map;
 		};
@@ -256,39 +241,111 @@
 	};
 
 	panel {
-		compatible = "panel-simple";
+		//compatible = "frida,frd350h54004";//, "panel-simple";
+		//compatible = "panel-dpi";
+		//compatible = "panel-boe-tv101wum-nl6";
 		//power-supply = <&ioexp0 6 GPIO_ACTIVE_HIGH>;
 		//enable-gpios = <&pcal6524 22 GPIO_ACTIVE_HIGH>;
         //enable-gpios = <&ioexp0 7 GPIO_ACTIVE_HIGH>;
+		compatible = "panel-simple";
+		label = "lcd";
 		width = <320>;
         height = <240>;
         refresh-rate = <60>;
+		backlight = <&reg_lcd_backlight>;
+		power-supply = <&reg_lcd_pwr_enable>;
+		bus-format = "rgb888";
 		status = "okay";
 
-		/*port {
+		port {
 			panel_in: endpoint {
 				remote-endpoint = <&display_out>;
 			};
-		};*/
+		};
+
+		panel-timing {
+			clock-frequency = <6000000>;
+			hactive = <320>;
+			vactive = <240>;
+			hback-porch = <43>;
+			hfront-porch = <8>;
+			vback-porch = <12>;
+			vfront-porch = <8>;
+			hsync-len = <4>;
+			vsync-len = <4>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			de-active = <1>;
+			pixelclk-active = <1>;
+		};
 	};
 
 	fb0: framebuffer@a4120000 {
     	compatible = "simple-framebuffer";
+		//compatible = "allwinner,simple-framebuffer", "simple-framebuffer";
+        //allwinner,pipeline = "de_be0-lcd0";
     	//reg = <0 0xa4120000 0 0x39000>;
 		reg = <0 0xa4120000 0 0x960000>;
     	width = <320>;
     	height = <240>;
     	stride = <640>;
 		bits-per-pixel = <16>;
-    	format = "r5g6b5";
+		format = "r8g8b8";
     	status = "okay";
+
+		//format = "r5g6b5";
 		display = <&display0>;
-		mode = <&timing0>;
+		//lcd-supply = <&reg_lcd_pwr_enable>;
+		/*
+		// Timing parameters 
+    	hactive = <320>;       // Horizontal active pixels
+    	vactive = <240>;       // Vertical active pixels
+    	hsync-len = <0>;       // Horizontal sync pulse width
+    	hback-porch = <43>;    // Horizontal back porch
+    	hfront-porch = <8>;    // Horizontal front porch
+    	vsync-len = <0>;       // Vertical sync pulse width
+    	vback-porch = <12>;    // Vertical back porch
+    	vfront-porch = <8>;    // Vertical front porch
+    	refresh = <60>;        // Refresh rate in Hz (adjust as needed)
+		*/
+		
+
+		//mode = <&timing0>;
 		clocks = <&clk IMX93_CLK_MEDIA_DISP_PIX>,
 				 <&clk IMX93_CLK_MEDIA_AXI>,
 				 <&clk IMX93_CLK_LCDIF_GATE>;
-	};
 
+		/*port@0 {
+            fb0_out: endpoint {
+                // Define the framebuffer input endpoint
+                remote-endpoint = <&lcdif_in>;
+            };
+        };*/
+	};
+    
+	display0: display0 {
+		bits-per-pixel = <24>;
+		bus-width = <24>;
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <6000000>;
+				hactive = <320>;
+				vactive = <240>;
+				hback-porch = <43>;
+				hfront-porch = <8>;
+				vback-porch = <12>;
+				vfront-porch = <8>;
+				hsync-len = <4>;
+				vsync-len = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <1>;
+			};
+		};
+	};
+    
 	/*pxp_v4l2_out {
 		compatible = "fsl,imx7d-pxp-v4l2", "fsl,imx6sx-pxp-v4l2", "fsl,imx6sl-pxp-v4l2";
 		status = "okay";
@@ -929,18 +986,23 @@
 	status = "okay";
 };
 
-&lcdif {
-    assigned-clock-rates = <150000000>, <30000000>, <400000000>, <133333333>;
-    enable_backlight = <&reg_lcd_backlight>;
-    enable_lcd_pwr = <&reg_lcd_pwr_enable>;
-    enable_lcd = <&reg_lcd_en>;
-    display = <&display0>;
-    status = "okay";
-    //fbmem = <0xa4120000 0x960000>;
-	//pinctrl-0 = <&pinctrl_lcdif>;
-	//fsl,fb = <&fb0>;
+&epxp {
+	status = "enabled";
+};
 
-	display0: display0 {
+&lcdif {
+    //assigned-clock-rates = <150000000>, <30000000>, <400000000>, <133333333>;
+	assigned-clock-rates = <6000000>;
+    //enable_backlight = <&reg_lcd_backlight>; // done in panel node
+    //enable_lcd_pwr = <&reg_lcd_pwr_enable>; // done in panel node
+    enable_lcd = <&reg_lcd_en>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcdif>;
+    //display = <&display0>;
+	fsl,interface-pix-fmt = "rgb888";
+    status = "okay";
+	
+	/*display0: display0 {
 		bits-per-pixel = <16>;
 		bus-width = <24>;
 		display-timings {
@@ -953,32 +1015,46 @@
 				hfront-porch = <8>;
 				vback-porch = <12>;
 				vfront-porch = <8>;
-				hsync-len = <0>;
-				vsync-len = <0>;
+				hsync-len = <4>;
+				vsync-len = <4>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <1>;
 				pixelclk-active = <1>;
 			};
 		};
-	};
+	};*/
+	
+	/*lcdif_disp: port@0 {
+        lcdif_in: endpoint {
+            // Define the LCDIF input endpoint
+			remote-endpoint = <&fb0_out>;
+        };
+    };*/
 };
+
 
 &parallel_disp_fmt {
     pinctrl-names = "default";
-    pinctrl-0 = <&pinctrl_lcdif>;
-    fsl,interface-pix-fmt = "rgb565";
-	compatible = "simple-framebuffer";
-    status = "okay";
+    //pinctrl-0 = <&pinctrl_lcdif>; // defined in lcdif node
+    //fsl,interface-pix-fmt = "rgb565";
+	compatible = "fsl,imx-parallel-display";
+	fsl,interface-pix-fmt = "rgb888";
+	width = <320>;
+    height = <240>;
+	stride = <640>;
+	bits-per-pixel = <24>;
+	//bits-per-pixel = <16>;
+	status = "okay";
 
-    /*ports {
+    ports {
         port@1 {
             reg = <1>;
             display_out: endpoint {
                 remote-endpoint = <&panel_in>;
             };
         };
-    };*/
+    };
 };
 
 
@@ -1189,10 +1265,6 @@
             MX93_PAD_GPIO_IO02__MEDIAMIX_DISP_VSYNC  0x31e
         >;
     };
-};
-
-&epxp {
-	status = "okay";
 };
 
 &isi_0 {
