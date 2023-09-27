@@ -1038,7 +1038,6 @@
     pinctrl-names = "default";
     //pinctrl-0 = <&pinctrl_lcdif>; // defined in lcdif node
     //fsl,interface-pix-fmt = "rgb565";
-	compatible = "fsl,imx-parallel-display";
 	fsl,interface-pix-fmt = "rgb888";
 	width = <320>;
     height = <240>;
