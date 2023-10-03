@@ -22,12 +22,12 @@
 #include <linux/clk.h>
 #include <sound/soc.h>
 
-#include "../codecs/wm8974.h"
+#include "../codecs/wm8940.h"
 #include "imx-audmux.h"
 
 #define DAI_NAME_SIZE	32
 
-struct imx_wm8974_data {
+struct imx_wm8940_data {
 	struct snd_soc_dai_link dai;
 	struct snd_soc_card card;
 	char codec_dai_name[DAI_NAME_SIZE];
@@ -36,9 +36,9 @@ struct imx_wm8974_data {
 	unsigned int clk_frequency;
 };
 
-static int imx_wm8974_dai_init(struct snd_soc_pcm_runtime *rtd)
+static int imx_wm8940_dai_init(struct snd_soc_pcm_runtime *rtd)
 {
-	struct imx_wm8974_data *data = snd_soc_card_get_drvdata(rtd->card);
+	struct imx_wm8940_data *data = snd_soc_card_get_drvdata(rtd->card);
 	struct device *dev = rtd->card->dev;
 	int ret;
 
@@ -52,11 +52,8 @@ static int imx_wm8974_dai_init(struct snd_soc_pcm_runtime *rtd)
 	return 0;
 }
 
-static const struct snd_soc_dapm_widget imx_wm8974_dapm_widgets[] = {
-	SND_SOC_DAPM_MIC("Mic Jack", NULL),
-	SND_SOC_DAPM_LINE("Line In Jack", NULL),
-	SND_SOC_DAPM_HP("Headphone Jack", NULL),
-	SND_SOC_DAPM_SPK("Line Out Jack", NULL),
+static const struct snd_soc_dapm_widget imx_wm8940_dapm_widgets[] = {
+	SND_SOC_DAPM_MIC("Mic", NULL),
 	SND_SOC_DAPM_SPK("Ext Spk", NULL),
 };
 
@@ -104,12 +101,12 @@ static int ssi_audmux_config(struct platform_device *pdev)
 	return ret;
 }
 
-static int imx_wm8974_probe(struct platform_device *pdev)
+static int imx_wm8940_probe(struct platform_device *pdev)
 {
 	struct device_node *ssi_np, *codec_np;
 	struct platform_device *ssi_pdev;
 	struct i2c_client *codec_dev;
-	struct imx_wm8974_data *data = NULL;
+	struct imx_wm8940_data *data = NULL;
 	struct snd_soc_dai_link_component *comp;
 	int ret;
 
@@ -176,12 +173,12 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 
 	data->dai.name = "HiFi";
 	data->dai.stream_name = "HiFi";
-	data->dai.codecs->dai_name = "wm8974-hifi";
+	data->dai.codecs->dai_name = "wm8940-hifi";
 	data->dai.codecs->of_node = codec_np;
 	data->dai.cpus->of_node = ssi_np;
 	data->dai.cpus->dai_name = dev_name(&ssi_pdev->dev);
 	data->dai.platforms->of_node = ssi_np;
-	data->dai.init = &imx_wm8974_dai_init;
+	data->dai.init = &imx_wm8940_dai_init;
 	data->dai.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 						SND_SOC_DAIFMT_CBS_CFS;
 
@@ -195,8 +192,8 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 	data->card.num_links = 1;
 	data->card.owner = THIS_MODULE;
 	data->card.dai_link = &data->dai;
-	data->card.dapm_widgets = imx_wm8974_dapm_widgets;
-	data->card.num_dapm_widgets = ARRAY_SIZE(imx_wm8974_dapm_widgets);
+	data->card.dapm_widgets = imx_wm8940_dapm_widgets;
+	data->card.num_dapm_widgets = ARRAY_SIZE(imx_wm8940_dapm_widgets);
 
 	platform_set_drvdata(pdev, &data->card);
 	snd_soc_card_set_drvdata(&data->card, data);
@@ -222,34 +219,34 @@ fail:
 	return ret;
 }
 
-static int imx_wm8974_remove(struct platform_device *pdev)
+static int imx_wm8940_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
-	struct imx_wm8974_data *data = snd_soc_card_get_drvdata(card);
+	struct imx_wm8940_data *data = snd_soc_card_get_drvdata(card);
 
 	clk_put(data->codec_clk);
 
 	return 0;
 }
 
-static const struct of_device_id imx_wm8974_dt_ids[] = {
-	{ .compatible = "fsl,imx-audio-wm8974", },
+static const struct of_device_id imx_wm8940_dt_ids[] = {
+	{ .compatible = "fsl,imx-audio-wm8940", },
 	{ /* sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, imx_wm8974_dt_ids);
+MODULE_DEVICE_TABLE(of, imx_wm8940_dt_ids);
 
-static struct platform_driver imx_wm8974_driver = {
+static struct platform_driver imx_wm8940_driver = {
 	.driver = {
-		.name = "imx-wm8974",
+		.name = "imx-wm8940",
 		.pm = &snd_soc_pm_ops,
-		.of_match_table = imx_wm8974_dt_ids,
+		.of_match_table = imx_wm8940_dt_ids,
 	},
-	.probe = imx_wm8974_probe,
-	.remove = imx_wm8974_remove,
+	.probe = imx_wm8940_probe,
+	.remove = imx_wm8940_remove,
 };
-module_platform_driver(imx_wm8974_driver);
+module_platform_driver(imx_wm8940_driver);
 
 MODULE_AUTHOR("ChargePoint Inc.");
-MODULE_DESCRIPTION("Freescale i.MX wm8974 ASoC machine driver");
+MODULE_DESCRIPTION("Freescale i.MX wm8940 ASoC machine driver");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:imx-wm8974");
+MODULE_ALIAS("platform:imx-wm8940");

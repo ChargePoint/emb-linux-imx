@@ -29,6 +29,7 @@ snd-soc-fsl-xcvr-objs := fsl_xcvr.o fsl_xcvr_sysfs.o
 snd-soc-fsl-aud2htx-objs := fsl_aud2htx.o
 snd-soc-fsl-rpmsg-objs := fsl_rpmsg.o
 snd-soc-fsl-esai-client-objs := fsl_esai_client.o
+snd-soc-imx-wm8940-objs := imx-wm8940.o
 snd-soc-imx-wm8974-objs := imx-wm8974.o
 
 obj-$(CONFIG_SND_SOC_FSL_AUDMIX) += snd-soc-fsl-audmix.o
@@ -49,6 +50,7 @@ obj-$(CONFIG_SND_SOC_FSL_XCVR) += snd-soc-fsl-xcvr.o
 obj-$(CONFIG_SND_SOC_FSL_AUD2HTX) += snd-soc-fsl-aud2htx.o
 obj-$(CONFIG_SND_SOC_FSL_RPMSG) += snd-soc-fsl-rpmsg.o
 obj-$(CONFIG_SND_SOC_FSL_ESAI_CLIENT) += snd-soc-fsl-esai-client.o
+obj-$(CONFIG_SND_SOC_IMX_WM8940) += snd-soc-imx-wm8940.o
 obj-$(CONFIG_SND_SOC_IMX_WM8974) += snd-soc-imx-wm8974.o
 
 # MPC5200 Platform Support
