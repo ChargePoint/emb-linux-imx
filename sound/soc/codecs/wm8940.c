@@ -396,9 +396,9 @@ static int wm8940_i2s_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_component *component = dai->component;
 	struct wm8940_priv *priv = snd_soc_component_get_drvdata(component);
-	u16 iface = snd_soc_component_read(component, WM8940_IFACE) & 0xFD9F;
-	u16 addcntrl = snd_soc_component_read(component, WM8940_ADDCNTRL) & 0xFFF1;
-	u16 companding =  snd_soc_component_read(component,
+	u16 iface = snd_soc_component_read32(component, WM8940_IFACE) & 0xFD9F;
+	u16 addcntrl = snd_soc_component_read32(component, WM8940_ADDCNTRL) & 0xFFF1;
+	u16 companding =  snd_soc_component_read32(component,
 						WM8940_COMPANDINGCTL) & 0xFFDF;
 	int ret;
 
@@ -764,7 +764,7 @@ static int wm8940_probe(struct snd_soc_component *component)
 	 * SOFTWARE_RESET on write
 	 * CHIP_ID on read
 	 */
-	reg = snd_soc_component_read(component, WM8940_SOFTRESET);
+	reg = snd_soc_component_read32(component, WM8940_SOFTRESET);
 	if (reg != WM8940_CHIP_ID) {
 		dev_err(component->dev, "Wrong wm8940 chip ID: 0x%x\n", reg);
 		return -ENODEV;
@@ -783,7 +783,7 @@ static int wm8940_probe(struct snd_soc_component *component)
 		return ret;
 
 	if (pdata) {
-		reg = snd_soc_component_read(component, WM8940_OUTPUTCTL);
+		reg = snd_soc_component_read32(component, WM8940_OUTPUTCTL);
 		ret = snd_soc_component_write(component, WM8940_OUTPUTCTL, reg | pdata->vroi);
 		if (ret < 0)
 			return ret;
