@@ -106,6 +106,39 @@
 		regulator-boot-on;
 		regulator-always-on;
 	};
+    
+	reg_lcd_en: regulator-lcd-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-en";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&ioexp0 7 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+    
+	reg_lcd_pwr_enable: regulator-lcd-pwr-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-pwr-enable";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&ioexp0 6 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_lcd_backlight: regulator-lcd-backlight{
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-backlight";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio2 21 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+	};
 
 	reg_can2_stby: regulator-can2-stby {
 		compatible = "regulator-fixed";
@@ -195,37 +228,17 @@
 		#sound-dai-cells = <1>;
 		compatible = "linux,bt-sco";
 	};
-/*
-	sound-bt-sco {
-		compatible = "simple-audio-card";
-		simple-audio-card,name = "bt-sco-audio";
-		simple-audio-card,format = "dsp_a";
-		simple-audio-card,bitclock-inversion;
-		simple-audio-card,frame-master = <&btcpu>;
-		simple-audio-card,bitclock-master = <&btcpu>;
 
-		btcpu: simple-audio-card,cpu {
-			sound-dai = <&sai1>;
-			dai-tdm-slot-num = <2>;
-			dai-tdm-slot-width = <16>;
-		};
+	panel {
+		compatible = "frida,frd350h54004";
+		status = "okay";
 
-		simple-audio-card,codec {
-			sound-dai = <&bt_sco_codec 1>;
-		};
-	};
-
-	sound-xcvr {
-		compatible = "fsl,imx-audio-card";
-		model = "imx-audio-xcvr";
-		pri-dai-link {
-			link-name = "XCVR PCM";
-			cpu {
-				sound-dai = <&xcvr>;
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&display_out>;
 			};
 		};
 	};
-*/
 };
 
 &gpio4 {
@@ -233,27 +246,7 @@
 	// pinctrl-0 = <&pinctrl_gpio4>;
 	gpio-line-names = "0", "1", "2", "3", "ioexp_en";
 };
-/*
-&sai1 {
-	#sound-dai-cells = <0>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_sai1>;
-	assigned-clocks = <&clk IMX93_CLK_SAI1>;
-	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
-	assigned-clock-rates = <12288000>;
-	status = "okay";
-};
 
-&sai3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_sai3>;
-	assigned-clocks = <&clk IMX93_CLK_SAI3>;
-	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
-	assigned-clock-rates = <12288000>;
-	fsl,sai-mclk-direction-output;
-	status = "okay";
-};
-*/
 &micfil {
 	#sound-dai-cells = <0>;
 	pinctrl-names = "default";
@@ -348,11 +341,6 @@
 			eee-broken-1000t;
 		};
 	};
-};
-
-&lcdif {
-	status = "okay";
-	assigned-clock-rates = <445333333>, <148444444>, <400000000>, <133333333>;
 };
 
 &lpm {
@@ -749,11 +737,6 @@
 	};
 };
 
-
-&media_blk_ctrl {
-	status = "okay";
-};
-
 &mu1 {
 	status = "okay";
 };
@@ -842,6 +825,43 @@
 		spi-max-frequency = <1000000>;
 	};
 };
+
+&media_blk_ctrl {
+	status = "okay";
+};
+
+&epxp {
+	status = "okay";
+};
+
+&lcdif {
+	status = "okay";
+	
+	backlight = <&reg_lcd_backlight>;
+    lcd_pwr = <&reg_lcd_pwr_enable>;
+	lcd_en = <&reg_lcd_en>;
+
+	fsl,interface-pix-fmt = "rgb888";
+	assigned-clock-rates = <150000000>, <30000000>, <400000000>, <133333333>;
+};
+
+
+&parallel_disp_fmt {
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_lcdif>;
+	fsl,interface-pix-fmt = "rgb888";
+	status = "okay";
+
+    ports {
+        port@1 {
+            reg = <1>;
+            display_out: endpoint {
+                remote-endpoint = <&panel_in>;
+            };
+        };
+    };
+};
+
 
 &iomuxc {
 	pinctrl_flexcan1: flexcan1grp {
@@ -978,26 +998,7 @@
 			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT	0x51e
 		>;
 	};
-/*
-	pinctrl_sai1: sai1grp {
-		fsl,pins = <
-			MX93_PAD_SAI1_TXC__SAI1_TX_BCLK			0x31e
-			MX93_PAD_SAI1_TXFS__SAI1_TX_SYNC		0x31e
-			MX93_PAD_SAI1_TXD0__SAI1_TX_DATA00		0x31e
-			MX93_PAD_SAI1_RXD0__SAI1_RX_DATA00		0x31e
-		>;
-	};
 
-	pinctrl_sai3: sai3grp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO26__SAI3_TX_SYNC		0x31e
-			MX93_PAD_GPIO_IO16__SAI3_TX_BCLK		0x31e
-			MX93_PAD_GPIO_IO17__SAI3_MCLK		0x31e
-			MX93_PAD_GPIO_IO19__SAI3_TX_DATA00		0x31e
-			MX93_PAD_GPIO_IO20__SAI3_RX_DATA00		0x31e
-		>;
-	};
-*/
 	pinctrl_pdm: pdmgrp {
 		fsl,pins = <
 			MX93_PAD_PDM_CLK__PDM_CLK			0x31e
@@ -1030,10 +1031,31 @@
 			MX93_PAD_UART2_TXD__LPSPI2_SCK		0x3fe
 		>;
 	};
-};
 
-&epxp {
-	status = "okay";
+	pinctrl_lcdif: lcdifgrp {
+        fsl,pins = <
+		    MX93_PAD_GPIO_IO00__MEDIAMIX_DISP_CLK	 0x31e
+			MX93_PAD_GPIO_IO01__MEDIAMIX_DISP_DE     0x31e
+            MX93_PAD_GPIO_IO07__MEDIAMIX_DISP_DATA03 0x31e
+            MX93_PAD_GPIO_IO08__MEDIAMIX_DISP_DATA04 0x31e
+            MX93_PAD_GPIO_IO09__MEDIAMIX_DISP_DATA05 0x31e
+            MX93_PAD_GPIO_IO10__MEDIAMIX_DISP_DATA06 0x31e
+            MX93_PAD_GPIO_IO11__MEDIAMIX_DISP_DATA07 0x31e
+            MX93_PAD_GPIO_IO14__MEDIAMIX_DISP_DATA10 0x31e
+            MX93_PAD_GPIO_IO15__MEDIAMIX_DISP_DATA11 0x31e
+            MX93_PAD_GPIO_IO16__MEDIAMIX_DISP_DATA12 0x31e
+            MX93_PAD_GPIO_IO17__MEDIAMIX_DISP_DATA13 0x31e
+            MX93_PAD_GPIO_IO18__MEDIAMIX_DISP_DATA14 0x31e
+            MX93_PAD_GPIO_IO19__MEDIAMIX_DISP_DATA15 0x31e
+            MX93_PAD_GPIO_IO23__MEDIAMIX_DISP_DATA19 0x31e
+            MX93_PAD_GPIO_IO24__MEDIAMIX_DISP_DATA20 0x31e
+            MX93_PAD_GPIO_IO25__MEDIAMIX_DISP_DATA21 0x31e
+            MX93_PAD_GPIO_IO26__MEDIAMIX_DISP_DATA22 0x31e
+            MX93_PAD_GPIO_IO27__MEDIAMIX_DISP_DATA23 0x31e
+            MX93_PAD_GPIO_IO03__MEDIAMIX_DISP_HSYNC  0x31e
+            MX93_PAD_GPIO_IO02__MEDIAMIX_DISP_VSYNC  0x31e
+        >;
+    };
 };
 
 &isi_0 {
