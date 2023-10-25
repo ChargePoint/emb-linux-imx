@@ -132,12 +132,11 @@
 	reg_lcd_backlight: regulator-lcd-backlight{
 		compatible = "regulator-fixed";
 		regulator-name = "lcd-backlight";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
 		gpio = <&gpio2 21 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		regulator-boot-on;
 		regulator-always-on;
+		startup-delay-us = <5000>;
 	};
 
 	reg_can2_stby: regulator-can2-stby {
@@ -227,6 +226,15 @@
 	bt_sco_codec: bt_sco_codec {
 		#sound-dai-cells = <1>;
 		compatible = "linux,bt-sco";
+	};
+
+	lcd_backlight: lcd_backlight {
+		compatible = "pwm-backlight";
+		pwms = <&tpm4 1 50000 0>;
+		brightness-levels = <0 20 25 30 50 80 100>;
+		default-brightness-level = <6>;
+		power-supply = <&reg_lcd_backlight>;
+		status = "okay";
 	};
 
 	panel {
@@ -837,7 +845,6 @@
 &lcdif {
 	status = "okay";
 	
-	backlight = <&reg_lcd_backlight>;
     lcd_pwr = <&reg_lcd_pwr_enable>;
 	lcd_en = <&reg_lcd_en>;
 
@@ -862,6 +869,11 @@
     };
 };
 
+&tpm4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm0>;
+	status = "okay";
+};
 
 &iomuxc {
 	pinctrl_flexcan1: flexcan1grp {
@@ -1056,6 +1068,13 @@
             MX93_PAD_GPIO_IO02__MEDIAMIX_DISP_VSYNC  0x31e
         >;
     };
+
+	pinctrl_pwm0: pwm0grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO21__TPM4_CH1	0x2
+		>;
+	};
+
 };
 
 &isi_0 {
