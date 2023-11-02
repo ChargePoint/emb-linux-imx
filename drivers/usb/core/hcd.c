@@ -1691,6 +1691,7 @@ static void usb_giveback_urb_bh(struct tasklet_struct *t)
 
 	spin_lock_irq(&bh->lock);
 	bh->running = true;
+ restart:
 	list_replace_init(&bh->head, &local_list);
 	spin_unlock_irq(&bh->lock);
 
@@ -1704,17 +1705,10 @@ static void usb_giveback_urb_bh(struct tasklet_struct *t)
 		bh->completing_ep = NULL;
 	}
 
-	/*
-	 * giveback new URBs next time to prevent this function
-	 * from not exiting for a long time.
-	 */
+	/* check if there are new URBs to giveback */
 	spin_lock_irq(&bh->lock);
-	if (!list_empty(&bh->head)) {
-		if (bh->high_prio)
-			tasklet_hi_schedule(&bh->bh);
-		else
-			tasklet_schedule(&bh->bh);
-	}
+	if (!list_empty(&bh->head))
+		goto restart;
 	bh->running = false;
 	spin_unlock_irq(&bh->lock);
 }
@@ -1743,7 +1737,7 @@ static void usb_giveback_urb_bh(struct tasklet_struct *t)
 void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 {
 	struct giveback_urb_bh *bh;
-	bool running;
+	bool running, high_prio_bh;
 
 	/* pass status to tasklet via unlinked */
 	if (likely(!urb->unlinked))
@@ -1754,10 +1748,13 @@ void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 		return;
 	}
 
-	if (usb_pipeisoc(urb->pipe) || usb_pipeint(urb->pipe))
+	if (usb_pipeisoc(urb->pipe) || usb_pipeint(urb->pipe)) {
 		bh = &hcd->high_prio_bh;
-	else
+		high_prio_bh = true;
+	} else {
 		bh = &hcd->low_prio_bh;
+		high_prio_bh = false;
+	}
 
 	spin_lock(&bh->lock);
 	list_add_tail(&urb->urb_list, &bh->head);
@@ -1766,7 +1763,7 @@ void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 
 	if (running)
 		;
-	else if (bh->high_prio)
+	else if (high_prio_bh)
 		tasklet_hi_schedule(&bh->bh);
 	else
 		tasklet_schedule(&bh->bh);
@@ -2819,7 +2816,6 @@ int usb_add_hcd(struct usb_hcd *hcd,
 {
 	int retval;
 	struct usb_device *rhdev;
-	struct usb_hcd *shared_hcd;
 
 	if (!hcd->skip_phy_initialization && usb_hcd_is_primary_hcd(hcd)) {
 		hcd->phy_roothub = usb_phy_roothub_alloc(hcd->self.sysdev);
@@ -2962,7 +2958,6 @@ int usb_add_hcd(struct usb_hcd *hcd,
 
 	/* initialize tasklets */
 	init_giveback_urb_bh(&hcd->high_prio_bh);
-	hcd->high_prio_bh.high_prio = true;
 	init_giveback_urb_bh(&hcd->low_prio_bh);
 
 	/* enable irqs just before we start the controller,
@@ -2981,26 +2976,13 @@ int usb_add_hcd(struct usb_hcd *hcd,
 		goto err_hcd_driver_start;
 	}
 
-	/* starting here, usbcore will pay attention to the shared HCD roothub */
-	shared_hcd = hcd->shared_hcd;
-	if (!usb_hcd_is_primary_hcd(hcd) && shared_hcd && HCD_DEFER_RH_REGISTER(shared_hcd)) {
-		retval = register_root_hub(shared_hcd);
-		if (retval != 0)
-			goto err_register_root_hub;
-
-		if (shared_hcd->uses_new_polling && HCD_POLL_RH(shared_hcd))
-			usb_hcd_poll_rh_status(shared_hcd);
-	}
-
 	/* starting here, usbcore will pay attention to this root hub */
-	if (!HCD_DEFER_RH_REGISTER(hcd)) {
-		retval = register_root_hub(hcd);
-		if (retval != 0)
-			goto err_register_root_hub;
+	retval = register_root_hub(hcd);
+	if (retval != 0)
+		goto err_register_root_hub;
 
-		if (hcd->uses_new_polling && HCD_POLL_RH(hcd))
-			usb_hcd_poll_rh_status(hcd);
-	}
+	if (hcd->uses_new_polling && HCD_POLL_RH(hcd))
+		usb_hcd_poll_rh_status(hcd);
 
 	return retval;
 
@@ -3038,7 +3020,6 @@ EXPORT_SYMBOL_GPL(usb_add_hcd);
 void usb_remove_hcd(struct usb_hcd *hcd)
 {
 	struct usb_device *rhdev = hcd->self.root_hub;
-	bool rh_registered;
 
 	dev_info(hcd->self.controller, "remove, state %x\n", hcd->state);
 
@@ -3049,7 +3030,6 @@ void usb_remove_hcd(struct usb_hcd *hcd)
 
 	dev_dbg(hcd->self.controller, "roothub graceful disconnect\n");
 	spin_lock_irq (&hcd_root_hub_lock);
-	rh_registered = hcd->rh_registered;
 	hcd->rh_registered = 0;
 	spin_unlock_irq (&hcd_root_hub_lock);
 
@@ -3059,8 +3039,7 @@ void usb_remove_hcd(struct usb_hcd *hcd)
 	cancel_work_sync(&hcd->died_work);
 
 	mutex_lock(&usb_bus_idr_lock);
-	if (rh_registered)
-		usb_disconnect(&rhdev);		/* Sets rhdev to NULL */
+	usb_disconnect(&rhdev);		/* Sets rhdev to NULL */
 	mutex_unlock(&usb_bus_idr_lock);
 
 	/*

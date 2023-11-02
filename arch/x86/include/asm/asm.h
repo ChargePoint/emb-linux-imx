@@ -122,18 +122,27 @@
 
 #ifdef __KERNEL__
 
-# include <asm/extable_fixup_types.h>
-
 /* Exception table entry */
 #ifdef __ASSEMBLY__
-
-# define _ASM_EXTABLE_TYPE(from, to, type)			\
+# define _ASM_EXTABLE_HANDLE(from, to, handler)			\
 	.pushsection "__ex_table","a" ;				\
 	.balign 4 ;						\
 	.long (from) - . ;					\
 	.long (to) - . ;					\
-	.long type ;						\
+	.long (handler) - . ;					\
 	.popsection
+
+# define _ASM_EXTABLE(from, to)					\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_default)
+
+# define _ASM_EXTABLE_UA(from, to)				\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_uaccess)
+
+# define _ASM_EXTABLE_CPY(from, to)				\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_copy)
+
+# define _ASM_EXTABLE_FAULT(from, to)				\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_fault)
 
 # ifdef CONFIG_KPROBES
 #  define _ASM_NOKPROBE(entry)					\
@@ -146,51 +155,26 @@
 # endif
 
 #else /* ! __ASSEMBLY__ */
-
-# define DEFINE_EXTABLE_TYPE_REG \
-	".macro extable_type_reg type:req reg:req\n"						\
-	".set .Lfound, 0\n"									\
-	".set .Lregnr, 0\n"									\
-	".irp rs,rax,rcx,rdx,rbx,rsp,rbp,rsi,rdi,r8,r9,r10,r11,r12,r13,r14,r15\n"		\
-	".ifc \\reg, %%\\rs\n"									\
-	".set .Lfound, .Lfound+1\n"								\
-	".long \\type + (.Lregnr << 8)\n"							\
-	".endif\n"										\
-	".set .Lregnr, .Lregnr+1\n"								\
-	".endr\n"										\
-	".set .Lregnr, 0\n"									\
-	".irp rs,eax,ecx,edx,ebx,esp,ebp,esi,edi,r8d,r9d,r10d,r11d,r12d,r13d,r14d,r15d\n"	\
-	".ifc \\reg, %%\\rs\n"									\
-	".set .Lfound, .Lfound+1\n"								\
-	".long \\type + (.Lregnr << 8)\n"							\
-	".endif\n"										\
-	".set .Lregnr, .Lregnr+1\n"								\
-	".endr\n"										\
-	".if (.Lfound != 1)\n"									\
-	".error \"extable_type_reg: bad register argument\"\n"					\
-	".endif\n"										\
-	".endm\n"
-
-# define UNDEFINE_EXTABLE_TYPE_REG \
-	".purgem extable_type_reg\n"
-
-# define _ASM_EXTABLE_TYPE(from, to, type)			\
+# define _EXPAND_EXTABLE_HANDLE(x) #x
+# define _ASM_EXTABLE_HANDLE(from, to, handler)			\
 	" .pushsection \"__ex_table\",\"a\"\n"			\
 	" .balign 4\n"						\
 	" .long (" #from ") - .\n"				\
 	" .long (" #to ") - .\n"				\
-	" .long " __stringify(type) " \n"			\
+	" .long (" _EXPAND_EXTABLE_HANDLE(handler) ") - .\n"	\
 	" .popsection\n"
 
-# define _ASM_EXTABLE_TYPE_REG(from, to, type, reg)				\
-	" .pushsection \"__ex_table\",\"a\"\n"					\
-	" .balign 4\n"								\
-	" .long (" #from ") - .\n"						\
-	" .long (" #to ") - .\n"						\
-	DEFINE_EXTABLE_TYPE_REG							\
-	"extable_type_reg reg=" __stringify(reg) ", type=" __stringify(type) " \n"\
-	UNDEFINE_EXTABLE_TYPE_REG						\
-	" .popsection\n"
+# define _ASM_EXTABLE(from, to)					\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_default)
+
+# define _ASM_EXTABLE_UA(from, to)				\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_uaccess)
+
+# define _ASM_EXTABLE_CPY(from, to)				\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_copy)
+
+# define _ASM_EXTABLE_FAULT(from, to)				\
+	_ASM_EXTABLE_HANDLE(from, to, ex_handler_fault)
 
 /* For C file, we already have NOKPROBE_SYMBOL macro */
 
@@ -204,17 +188,6 @@ register unsigned long current_stack_pointer asm(_ASM_SP);
 #define ASM_CALL_CONSTRAINT "+r" (current_stack_pointer)
 #endif /* __ASSEMBLY__ */
 
-#define _ASM_EXTABLE(from, to)					\
-	_ASM_EXTABLE_TYPE(from, to, EX_TYPE_DEFAULT)
-
-#define _ASM_EXTABLE_UA(from, to)				\
-	_ASM_EXTABLE_TYPE(from, to, EX_TYPE_UACCESS)
-
-#define _ASM_EXTABLE_CPY(from, to)				\
-	_ASM_EXTABLE_TYPE(from, to, EX_TYPE_COPY)
-
-#define _ASM_EXTABLE_FAULT(from, to)				\
-	_ASM_EXTABLE_TYPE(from, to, EX_TYPE_FAULT)
-
 #endif /* __KERNEL__ */
+
 #endif /* _ASM_X86_ASM_H */

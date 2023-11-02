@@ -123,7 +123,6 @@ static int v9fs_set_acl(struct p9_fid *fid, int type, struct posix_acl *acl)
 	char *name;
 	size_t size;
 	void *buffer;
-
 	if (!acl)
 		return 0;
 

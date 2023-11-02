@@ -3401,10 +3401,8 @@ static int pool_ctr(struct dm_target *ti, unsigned argc, char **argv)
 						calc_metadata_threshold(pt),
 						metadata_low_callback,
 						pool);
-	if (r) {
-		ti->error = "Error registering metadata threshold";
+	if (r)
 		goto out_flags_changed;
-	}
 
 	dm_pool_register_pre_commit_callback(pool->pmd,
 					     metadata_pre_commit_callback, pool);

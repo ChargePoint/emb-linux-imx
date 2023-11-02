@@ -36,15 +36,6 @@ static void nft_default_forward_path(struct nf_flow_route *route,
 	route->tuple[dir].xmit_type	= nft_xmit_type(dst_cache);
 }
 
-static bool nft_is_valid_ether_device(const struct net_device *dev)
-{
-	if (!dev || (dev->flags & IFF_LOOPBACK) || dev->type != ARPHRD_ETHER ||
-	    dev->addr_len != ETH_ALEN || !is_valid_ether_addr(dev->dev_addr))
-		return false;
-
-	return true;
-}
-
 static int nft_dev_fill_forward_path(const struct nf_flow_route *route,
 				     const struct dst_entry *dst_cache,
 				     const struct nf_conn *ct,
@@ -55,9 +46,6 @@ static int nft_dev_fill_forward_path(const struct nf_flow_route *route,
 	struct net_device *dev = dst_cache->dev;
 	struct neighbour *n;
 	u8 nud_state;
-
-	if (!nft_is_valid_ether_device(dev))
-		goto out;
 
 	n = dst_neigh_lookup(dst_cache, daddr);
 	if (!n)
@@ -72,7 +60,6 @@ static int nft_dev_fill_forward_path(const struct nf_flow_route *route,
 	if (!(nud_state & NUD_VALID))
 		return -1;
 
-out:
 	return dev_fill_forward_path(dev, ha, stack);
 }
 
@@ -90,6 +77,15 @@ struct nft_forward_info {
 	u8 h_dest[ETH_ALEN];
 	enum flow_offload_xmit_type xmit_type;
 };
+
+static bool nft_is_valid_ether_device(const struct net_device *dev)
+{
+	if (!dev || (dev->flags & IFF_LOOPBACK) || dev->type != ARPHRD_ETHER ||
+	    dev->addr_len != ETH_ALEN || !is_valid_ether_addr(dev->dev_addr))
+		return false;
+
+	return true;
+}
 
 static void nft_dev_path_info(const struct net_device_path_stack *stack,
 			      struct nft_forward_info *info,
@@ -123,8 +119,7 @@ static void nft_dev_path_info(const struct net_device_path_stack *stack,
 				info->indev = NULL;
 				break;
 			}
-			if (!info->outdev)
-				info->outdev = path->dev;
+			info->outdev = path->dev;
 			info->encap[info->num_encaps].id = path->encap.id;
 			info->encap[info->num_encaps].proto = path->encap.proto;
 			info->num_encaps++;
@@ -298,8 +293,7 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
 	case IPPROTO_TCP:
 		tcph = skb_header_pointer(pkt->skb, nft_thoff(pkt),
 					  sizeof(_tcph), &_tcph);
-		if (unlikely(!tcph || tcph->fin || tcph->rst ||
-			     !nf_conntrack_tcp_established(ct)))
+		if (unlikely(!tcph || tcph->fin || tcph->rst))
 			goto out;
 		break;
 	case IPPROTO_UDP:

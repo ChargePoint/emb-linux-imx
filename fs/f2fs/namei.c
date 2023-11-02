@@ -74,7 +74,7 @@ static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 	if (err)
 		goto fail_drop;
 
-	err = f2fs_dquot_initialize(inode);
+	err = dquot_initialize(inode);
 	if (err)
 		goto fail_drop;
 
@@ -91,6 +91,8 @@ static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 	if (test_opt(sbi, INLINE_XATTR))
 		set_inode_flag(inode, FI_INLINE_XATTR);
 
+	if (test_opt(sbi, INLINE_DATA) && f2fs_may_inline_data(inode))
+		set_inode_flag(inode, FI_INLINE_DATA);
 	if (f2fs_may_inline_dentry(inode))
 		set_inode_flag(inode, FI_INLINE_DENTRY);
 
@@ -107,6 +109,10 @@ static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 
 	f2fs_init_extent_tree(inode, NULL);
 
+	stat_inc_inline_xattr(inode);
+	stat_inc_inline_inode(inode);
+	stat_inc_inline_dir(inode);
+
 	F2FS_I(inode)->i_flags =
 		f2fs_mask_flags(mode, F2FS_I(dir)->i_flags & F2FS_FL_INHERITED);
 
@@ -122,14 +128,6 @@ static struct inode *f2fs_new_inode(struct inode *dir, umode_t mode)
 					f2fs_may_compress(inode))
 			set_compress_context(inode);
 	}
-
-	/* Should enable inline_data after compression set */
-	if (test_opt(sbi, INLINE_DATA) && f2fs_may_inline_data(inode))
-		set_inode_flag(inode, FI_INLINE_DATA);
-
-	stat_inc_inline_xattr(inode);
-	stat_inc_inline_inode(inode);
-	stat_inc_inline_dir(inode);
 
 	f2fs_set_inode_flags(inode);
 
@@ -329,9 +327,6 @@ static void set_compress_inode(struct f2fs_sb_info *sbi, struct inode *inode,
 		if (!is_extension_exist(name, ext[i], false))
 			continue;
 
-		/* Do not use inline_data with compression */
-		stat_dec_inline_inode(inode);
-		clear_inode_flag(inode, FI_INLINE_DATA);
 		set_compress_context(inode);
 		return;
 	}
@@ -350,7 +345,7 @@ static int f2fs_create(struct user_namespace *mnt_userns, struct inode *dir,
 	if (!f2fs_is_checkpoint_ready(sbi))
 		return -ENOSPC;
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -409,7 +404,7 @@ static int f2fs_link(struct dentry *old_dentry, struct inode *dir,
 			F2FS_I(old_dentry->d_inode)->i_projid)))
 		return -EXDEV;
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -465,14 +460,7 @@ static int __recover_dot_dentries(struct inode *dir, nid_t pino)
 		return 0;
 	}
 
-	if (!S_ISDIR(dir->i_mode)) {
-		f2fs_err(sbi, "inconsistent inode status, skip recovering inline_dots inode (ino:%lu, i_mode:%u, pino:%u)",
-			  dir->i_ino, dir->i_mode, pino);
-		set_sbi_flag(sbi, SBI_NEED_FSCK);
-		return -ENOTDIR;
-	}
-
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -610,10 +598,10 @@ static int f2fs_unlink(struct inode *dir, struct dentry *dentry)
 		goto fail;
 	}
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		goto fail;
-	err = f2fs_dquot_initialize(inode);
+	err = dquot_initialize(inode);
 	if (err)
 		goto fail;
 
@@ -687,7 +675,7 @@ static int f2fs_symlink(struct user_namespace *mnt_userns, struct inode *dir,
 	if (err)
 		return err;
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -758,7 +746,7 @@ static int f2fs_mkdir(struct user_namespace *mnt_userns, struct inode *dir,
 	if (unlikely(f2fs_cp_error(sbi)))
 		return -EIO;
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -815,7 +803,7 @@ static int f2fs_mknod(struct user_namespace *mnt_userns, struct inode *dir,
 	if (!f2fs_is_checkpoint_ready(sbi))
 		return -ENOSPC;
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -853,7 +841,7 @@ static int __f2fs_tmpfile(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	int err;
 
-	err = f2fs_dquot_initialize(dir);
+	err = dquot_initialize(dir);
 	if (err)
 		return err;
 
@@ -977,16 +965,16 @@ static int f2fs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			return err;
 	}
 
-	err = f2fs_dquot_initialize(old_dir);
+	err = dquot_initialize(old_dir);
 	if (err)
 		goto out;
 
-	err = f2fs_dquot_initialize(new_dir);
+	err = dquot_initialize(new_dir);
 	if (err)
 		goto out;
 
 	if (new_inode) {
-		err = f2fs_dquot_initialize(new_inode);
+		err = dquot_initialize(new_inode);
 		if (err)
 			goto out;
 	}
@@ -1150,11 +1138,11 @@ static int f2fs_cross_rename(struct inode *old_dir, struct dentry *old_dentry,
 			F2FS_I(new_dentry->d_inode)->i_projid)))
 		return -EXDEV;
 
-	err = f2fs_dquot_initialize(old_dir);
+	err = dquot_initialize(old_dir);
 	if (err)
 		goto out;
 
-	err = f2fs_dquot_initialize(new_dir);
+	err = dquot_initialize(new_dir);
 	if (err)
 		goto out;
 

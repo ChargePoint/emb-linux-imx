@@ -581,30 +581,27 @@ static int lock_pages(
 	struct privcmd_dm_op_buf kbufs[], unsigned int num,
 	struct page *pages[], unsigned int nr_pages, unsigned int *pinned)
 {
-	unsigned int i, off = 0;
+	unsigned int i;
 
-	for (i = 0; i < num; ) {
+	for (i = 0; i < num; i++) {
 		unsigned int requested;
 		int page_count;
 
 		requested = DIV_ROUND_UP(
 			offset_in_page(kbufs[i].uptr) + kbufs[i].size,
-			PAGE_SIZE) - off;
+			PAGE_SIZE);
 		if (requested > nr_pages)
 			return -ENOSPC;
 
 		page_count = pin_user_pages_fast(
-			(unsigned long)kbufs[i].uptr + off * PAGE_SIZE,
+			(unsigned long) kbufs[i].uptr,
 			requested, FOLL_WRITE, pages);
-		if (page_count <= 0)
-			return page_count ? : -EFAULT;
+		if (page_count < 0)
+			return page_count;
 
 		*pinned += page_count;
 		nr_pages -= page_count;
 		pages += page_count;
-
-		off = (requested == page_count) ? 0 : off + page_count;
-		i += !off;
 	}
 
 	return 0;
@@ -680,8 +677,10 @@ static long privcmd_ioctl_dm_op(struct file *file, void __user *udata)
 	}
 
 	rc = lock_pages(kbufs, kdata.num, pages, nr_pages, &pinned);
-	if (rc < 0)
+	if (rc < 0) {
+		nr_pages = pinned;
 		goto out;
+	}
 
 	for (i = 0; i < kdata.num; i++) {
 		set_xen_guest_handle(xbufs[i].h, kbufs[i].uptr);
@@ -693,7 +692,7 @@ static long privcmd_ioctl_dm_op(struct file *file, void __user *udata)
 	xen_preemptible_hcall_end();
 
 out:
-	unlock_pages(pages, pinned);
+	unlock_pages(pages, nr_pages);
 	kfree(xbufs);
 	kfree(pages);
 	kfree(kbufs);

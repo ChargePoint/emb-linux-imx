@@ -968,8 +968,6 @@ static int madvise_inject_error(int behavior,
 			pr_info("Injecting memory failure for pfn %#lx at process virtual address %#lx\n",
 				 pfn, start);
 			ret = memory_failure(pfn, MF_COUNT_INCREASED);
-			if (ret == -EOPNOTSUPP)
-				ret = 0;
 		}
 
 		if (ret)
@@ -1296,7 +1294,8 @@ SYSCALL_DEFINE5(process_madvise, int, pidfd, const struct iovec __user *, vec,
 		iov_iter_advance(&iter, iovec.iov_len);
 	}
 
-	ret = (total_len - iov_iter_count(&iter)) ? : ret;
+	if (ret == 0)
+		ret = total_len - iov_iter_count(&iter);
 
 release_mm:
 	mmput(mm);

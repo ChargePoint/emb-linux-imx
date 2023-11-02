@@ -807,7 +807,6 @@ static int __run_perf_stat(int argc, const char **argv, int run_idx)
 		return -1;
 
 	evlist__for_each_entry(evsel_list, counter) {
-		counter->reset_group = false;
 		if (bpf_counter__load(counter, &target))
 			return -1;
 		if (!evsel__is_bpf(counter))
@@ -957,10 +956,10 @@ try_again_reset:
 	 * Enable counters and exec the command:
 	 */
 	if (forks) {
+		evlist__start_workload(evsel_list);
 		err = enable_counters();
 		if (err)
 			return -1;
-		evlist__start_workload(evsel_list);
 
 		t0 = rdclock();
 		clock_gettime(CLOCK_MONOTONIC, &ref_time);

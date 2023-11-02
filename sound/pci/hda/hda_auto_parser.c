@@ -823,7 +823,7 @@ static void set_pin_targets(struct hda_codec *codec,
 		snd_hda_set_pin_ctl_cache(codec, cfg->nid, cfg->val);
 }
 
-void __snd_hda_apply_fixup(struct hda_codec *codec, int id, int action, int depth)
+static void apply_fixup(struct hda_codec *codec, int id, int action, int depth)
 {
 	const char *modelname = codec->fixup_name;
 
@@ -833,7 +833,7 @@ void __snd_hda_apply_fixup(struct hda_codec *codec, int id, int action, int dept
 		if (++depth > 10)
 			break;
 		if (fix->chained_before)
-			__snd_hda_apply_fixup(codec, fix->chain_id, action, depth + 1);
+			apply_fixup(codec, fix->chain_id, action, depth + 1);
 
 		switch (fix->type) {
 		case HDA_FIXUP_PINS:
@@ -874,7 +874,6 @@ void __snd_hda_apply_fixup(struct hda_codec *codec, int id, int action, int dept
 		id = fix->chain_id;
 	}
 }
-EXPORT_SYMBOL_GPL(__snd_hda_apply_fixup);
 
 /**
  * snd_hda_apply_fixup - Apply the fixup chain with the given action
@@ -884,7 +883,7 @@ EXPORT_SYMBOL_GPL(__snd_hda_apply_fixup);
 void snd_hda_apply_fixup(struct hda_codec *codec, int action)
 {
 	if (codec->fixup_list)
-		__snd_hda_apply_fixup(codec, codec->fixup_id, action, 0);
+		apply_fixup(codec, codec->fixup_id, action, 0);
 }
 EXPORT_SYMBOL_GPL(snd_hda_apply_fixup);
 

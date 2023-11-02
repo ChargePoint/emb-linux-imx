@@ -556,7 +556,7 @@ static int ffa_partition_info_get(const char *uuid_str,
 		return -ENODEV;
 	}
 
-	count = ffa_partition_probe(&uuid, &pbuf);
+	count = ffa_partition_probe(&uuid_null, &pbuf);
 	if (count <= 0)
 		return -ENOENT;
 
@@ -645,6 +645,8 @@ static void ffa_setup_partitions(void)
 			       __func__, tpbuf->id);
 			continue;
 		}
+
+		ffa_dev_set_drvdata(ffa_dev, drv_info);
 	}
 	kfree(pbuf);
 }

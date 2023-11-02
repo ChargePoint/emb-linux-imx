@@ -99,8 +99,7 @@
 }
 
 #define ASM_CALL_ARG0							\
-	"call %P[__func]				\n"		\
-	ASM_REACHABLE
+	"call %P[__func]				\n"
 
 #define ASM_CALL_ARG1							\
 	"movq	%[arg1], %%rdi				\n"		\

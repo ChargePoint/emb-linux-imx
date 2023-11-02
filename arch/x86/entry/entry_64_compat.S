@@ -4,6 +4,7 @@
  *
  * Copyright 2000-2002 Andi Kleen, SuSE Labs.
  */
+#include "calling.h"
 #include <asm/asm-offsets.h>
 #include <asm/current.h>
 #include <asm/errno.h>
@@ -13,11 +14,8 @@
 #include <asm/irqflags.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
-#include <asm/nospec-branch.h>
 #include <linux/linkage.h>
 #include <linux/err.h>
-
-#include "calling.h"
 
 	.section .entry.text, "ax"
 
@@ -49,7 +47,7 @@
  * 0(%ebp) arg6
  */
 SYM_CODE_START(entry_SYSENTER_compat)
-	UNWIND_HINT_ENTRY
+	UNWIND_HINT_EMPTY
 	/* Interrupts are off on entry. */
 	SWAPGS
 
@@ -113,9 +111,6 @@ SYM_INNER_LABEL(entry_SYSENTER_compat_after_hwframe, SYM_L_GLOBAL)
 	UNWIND_HINT_REGS
 
 	cld
-
-	IBRS_ENTER
-	UNTRAIN_RET
 
 	/*
 	 * SYSENTER doesn't filter flags, so we need to clear NT and AC
@@ -202,7 +197,7 @@ SYM_CODE_END(entry_SYSENTER_compat)
  * 0(%esp) arg6
  */
 SYM_CODE_START(entry_SYSCALL_compat)
-	UNWIND_HINT_ENTRY
+	UNWIND_HINT_EMPTY
 	/* Interrupts are off on entry. */
 	swapgs
 
@@ -257,9 +252,6 @@ SYM_INNER_LABEL(entry_SYSCALL_compat_after_hwframe, SYM_L_GLOBAL)
 
 	UNWIND_HINT_REGS
 
-	IBRS_ENTER
-	UNTRAIN_RET
-
 	movq	%rsp, %rdi
 	call	do_fast_syscall_32
 	/* XEN PV guests always use IRET path */
@@ -273,8 +265,6 @@ sysret32_from_system_call:
 	 * stack. So let's erase the thread stack right now.
 	 */
 	STACKLEAK_ERASE
-
-	IBRS_EXIT
 
 	movq	RBX(%rsp), %rbx		/* pt_regs->rbx */
 	movq	RBP(%rsp), %rbp		/* pt_regs->rbp */
@@ -349,7 +339,7 @@ SYM_CODE_END(entry_SYSCALL_compat)
  * ebp  arg6
  */
 SYM_CODE_START(entry_INT80_compat)
-	UNWIND_HINT_ENTRY
+	UNWIND_HINT_EMPTY
 	/*
 	 * Interrupts are off on entry.
 	 */
@@ -418,9 +408,6 @@ SYM_CODE_START(entry_INT80_compat)
 	UNWIND_HINT_REGS
 
 	cld
-
-	IBRS_ENTER
-	UNTRAIN_RET
 
 	movq	%rsp, %rdi
 	call	do_int80_syscall_32

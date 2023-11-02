@@ -373,13 +373,6 @@ static void gpio_mockup_debugfs_setup(struct device *dev,
 	}
 }
 
-static void gpio_mockup_debugfs_cleanup(void *data)
-{
-	struct gpio_mockup_chip *chip = data;
-
-	debugfs_remove_recursive(chip->dbg_dir);
-}
-
 static void gpio_mockup_dispose_mappings(void *data)
 {
 	struct gpio_mockup_chip *chip = data;
@@ -462,7 +455,7 @@ static int gpio_mockup_probe(struct platform_device *pdev)
 
 	gpio_mockup_debugfs_setup(dev, chip);
 
-	return devm_add_action_or_reset(dev, gpio_mockup_debugfs_cleanup, chip);
+	return 0;
 }
 
 static const struct of_device_id gpio_mockup_of_match[] = {
@@ -554,10 +547,8 @@ static int __init gpio_mockup_register_chip(int idx)
 	}
 
 	fwnode = fwnode_create_software_node(properties, NULL);
-	if (IS_ERR(fwnode)) {
-		kfree_strarray(line_names, ngpio);
+	if (IS_ERR(fwnode))
 		return PTR_ERR(fwnode);
-	}
 
 	pdevinfo.name = "gpio-mockup";
 	pdevinfo.id = idx;
@@ -620,9 +611,9 @@ static int __init gpio_mockup_init(void)
 
 static void __exit gpio_mockup_exit(void)
 {
-	gpio_mockup_unregister_pdevs();
 	debugfs_remove_recursive(gpio_mockup_dbg_dir);
 	platform_driver_unregister(&gpio_mockup_driver);
+	gpio_mockup_unregister_pdevs();
 }
 
 module_init(gpio_mockup_init);

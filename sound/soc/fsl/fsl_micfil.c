@@ -25,7 +25,6 @@
 #include "fsl_micfil.h"
 #include "imx-pcm.h"
 
-#define MICFIL_NUM_RATES  7
 #define FSL_MICFIL_RATES		SNDRV_PCM_RATE_8000_48000
 #define FSL_MICFIL_FORMATS		(SNDRV_PCM_FMTBIT_S16_LE)
 
@@ -39,8 +38,6 @@ struct fsl_micfil {
 	struct snd_dmaengine_dai_dma_data dma_params_rx;
 	struct kobject *hwvad_kobject;
 	struct sdma_audio_config audio_config;
-	struct snd_pcm_hw_constraint_list constraint_rates;
-	unsigned int constraint_rates_list[MICFIL_NUM_RATES];
 	unsigned int vad_channel;
 	unsigned int dataline;
 	char name[32];
@@ -75,7 +72,6 @@ struct fsl_micfil_soc_data {
 	unsigned int fifo_depth;
 	unsigned int dataline;
 	bool imx;
-	bool use_edma;
 	u64  formats;
 };
 
@@ -100,19 +96,9 @@ static struct fsl_micfil_soc_data fsl_micfil_imx8mp = {
 	.formats = SNDRV_PCM_FMTBIT_S32_LE,
 };
 
-static struct fsl_micfil_soc_data fsl_micfil_imx93 = {
-	.imx = true,
-	.use_edma = true,
-	.fifos = 8,
-	.fifo_depth = 32,
-	.dataline =  0xf,
-	.formats = SNDRV_PCM_FMTBIT_S32_LE,
-};
-
 static const struct of_device_id fsl_micfil_dt_ids[] = {
 	{ .compatible = "fsl,imx8mm-micfil", .data = &fsl_micfil_imx8mm },
 	{ .compatible = "fsl,imx8mp-micfil", .data = &fsl_micfil_imx8mp },
-	{ .compatible = "fsl,imx93-micfil", .data = &fsl_micfil_imx93 },
 	{}
 };
 MODULE_DEVICE_TABLE(of, fsl_micfil_dt_ids);
@@ -1411,7 +1397,7 @@ static int fsl_micfil_set_mclk_rate(struct fsl_micfil *micfil, int clk_id,
 			 * to any known frequency ???
 			 */
 			clk_rate = round_up(clk_rate, 10);
-			if (clk_rate != 0 && do_div(clk_rate, ratio) == 0) {
+			if (do_div(clk_rate, ratio) == 0) {
 				npll = micfil->clk_src[i];
 				break;
 			}
@@ -1450,31 +1436,11 @@ static int fsl_micfil_startup(struct snd_pcm_substream *substream,
 			      struct snd_soc_dai *dai)
 {
 	struct fsl_micfil *micfil = snd_soc_dai_get_drvdata(dai);
-	unsigned int rates[MICFIL_NUM_RATES] = {8000, 11025, 16000, 22050, 32000, 44100, 48000};
-	int i, j, k = 0;
-	u64 clk_rate;
 
 	if (!micfil) {
 		dev_err(dai->dev, "micfil dai priv_data not set\n");
 		return -EINVAL;
 	}
-
-	micfil->constraint_rates.list = micfil->constraint_rates_list;
-	micfil->constraint_rates.count = 0;
-
-	for (j = 0; j < MICFIL_NUM_RATES; j++) {
-		for (i = 0; i < MICFIL_CLK_SRC_NUM; i++) {
-			clk_rate = clk_get_rate(micfil->clk_src[i]);
-			if (clk_rate != 0 && do_div(clk_rate, rates[j]) == 0) {
-				micfil->constraint_rates_list[k++] = rates[j];
-				micfil->constraint_rates.count++;
-				break;
-			}
-		}
-	}
-
-	snd_pcm_hw_constraint_list(substream->runtime, 0, SNDRV_PCM_HW_PARAM_RATE,
-				   &micfil->constraint_rates);
 
 	return 0;
 }
@@ -1634,10 +1600,7 @@ static int fsl_micfil_hw_params(struct snd_pcm_substream *substream,
 	micfil->audio_config.sw_done_sel = BIT(31);
 	micfil->dma_params_rx.peripheral_config  = &micfil->audio_config;
 	micfil->dma_params_rx.peripheral_size    = sizeof(micfil->audio_config);
-	if (micfil->soc->use_edma)
-		micfil->dma_params_rx.maxburst = channels;
-	else
-		micfil->dma_params_rx.maxburst = channels * MICFIL_DMA_MAXBURST_RX;
+	micfil->dma_params_rx.maxburst = channels * MICFIL_DMA_MAXBURST_RX;
 
 	return 0;
 }

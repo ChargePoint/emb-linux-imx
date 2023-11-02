@@ -1784,6 +1784,7 @@ static int lineevent_create(struct gpio_device *gdev, void __user *ip)
 		ret = -ENODEV;
 		goto out_free_le;
 	}
+	le->irq = irq;
 
 	if (eflags & GPIOEVENT_REQUEST_RISING_EDGE)
 		irqflags |= test_bit(FLAG_ACTIVE_LOW, &desc->flags) ?
@@ -1797,7 +1798,7 @@ static int lineevent_create(struct gpio_device *gdev, void __user *ip)
 	init_waitqueue_head(&le->wait);
 
 	/* Request a thread to read the events */
-	ret = request_threaded_irq(irq,
+	ret = request_threaded_irq(le->irq,
 				   lineevent_irq_handler,
 				   lineevent_irq_thread,
 				   irqflags,
@@ -1805,8 +1806,6 @@ static int lineevent_create(struct gpio_device *gdev, void __user *ip)
 				   le);
 	if (ret)
 		goto out_free_le;
-
-	le->irq = irq;
 
 	fd = get_unused_fd_flags(O_RDONLY | O_CLOEXEC);
 	if (fd < 0) {

@@ -1105,14 +1105,19 @@ static int imx_shm_net_probe(struct platform_device *pdev)
 	spin_lock_init(&in->tx_clean_lock);
 	mutex_init(&in->state_lock);
 
-	ret = imx_shm_net_calc_qsize(ndev);
+	/* enable peer's reset notification */
+	ret = mu_enable_reset_irq(ndev);
 	if (ret)
 		goto err_free;
+
+	ret = imx_shm_net_calc_qsize(ndev);
+	if (ret)
+		goto err_reset_irq;
 
 	in->state_wq = alloc_ordered_workqueue(device_name, 0);
 	if (!in->state_wq) {
 		ret = -ENOMEM;
-		goto err_free;
+		goto err_reset_irq;
 	}
 
 	INIT_WORK(&in->state_work, imx_shm_net_state_change);
@@ -1139,12 +1144,6 @@ static int imx_shm_net_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto err_unregister;
 	}
-
-	/* enable peer's reset notification */
-	ret = mu_enable_reset_irq(ndev);
-	if (ret)
-		goto err_reset_irq;
-
 	dev_info(&in->pdev->dev,
 		 "Mailbox is ready for cross core communication!\n");
 
@@ -1167,16 +1166,14 @@ retry:
 
 	return 0;
 
-err_reset_irq:
-#ifdef CONFIG_IMX_SCU
-	imx_scu_irq_unregister_notifier(&in->pnotifier);
-#endif
-
 err_unregister:
 	unregister_netdev(ndev);
 
 err_wq:
 	destroy_workqueue(in->state_wq);
+
+err_reset_irq:
+	imx_scu_irq_unregister_notifier(&in->pnotifier);
 
 err_free:
 	list_del(&in->isn_node);

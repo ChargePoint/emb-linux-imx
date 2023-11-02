@@ -236,7 +236,6 @@ static u64 load_latency_data(u64 status)
 static u64 store_latency_data(u64 status)
 {
 	union intel_x86_pebs_dse dse;
-	union perf_mem_data_src src;
 	u64 val;
 
 	dse.val = status;
@@ -264,14 +263,7 @@ static u64 store_latency_data(u64 status)
 
 	val |= P(BLK, NA);
 
-	/*
-	 * the pebs_data_source table is only for loads
-	 * so override the mem_op to say STORE instead
-	 */
-	src.val = val;
-	src.mem_op = P(OP,STORE);
-
-	return src.val;
+	return val;
 }
 
 struct pebs_record_core {

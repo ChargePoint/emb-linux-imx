@@ -268,16 +268,19 @@
 1:	popl	%ds
 2:	popl	%es
 3:	popl	%fs
-4:	addl	$(4 + \pop), %esp	/* pop the unused "gs" slot */
+	addl	$(4 + \pop), %esp	/* pop the unused "gs" slot */
 	IRET_FRAME
-
-	/*
-	 * There is no _ASM_EXTABLE_TYPE_REG() for ASM, however since this is
-	 * ASM the registers are known and we can trivially hard-code them.
-	 */
-	_ASM_EXTABLE_TYPE(1b, 2b, EX_TYPE_POP_ZERO|EX_REG_DS)
-	_ASM_EXTABLE_TYPE(2b, 3b, EX_TYPE_POP_ZERO|EX_REG_ES)
-	_ASM_EXTABLE_TYPE(3b, 4b, EX_TYPE_POP_ZERO|EX_REG_FS)
+.pushsection .fixup, "ax"
+4:	movl	$0, (%esp)
+	jmp	1b
+5:	movl	$0, (%esp)
+	jmp	2b
+6:	movl	$0, (%esp)
+	jmp	3b
+.popsection
+	_ASM_EXTABLE(1b, 4b)
+	_ASM_EXTABLE(2b, 5b)
+	_ASM_EXTABLE(3b, 6b)
 .endm
 
 .macro RESTORE_ALL_NMI cr3_reg:req pop=0
@@ -698,6 +701,7 @@ SYM_CODE_START(__switch_to_asm)
 	movl	%ebx, PER_CPU_VAR(__stack_chk_guard)
 #endif
 
+#ifdef CONFIG_RETPOLINE
 	/*
 	 * When switching from a shallower to a deeper call stack
 	 * the RSB may either underflow or use entries populated
@@ -706,6 +710,7 @@ SYM_CODE_START(__switch_to_asm)
 	 * speculative execution to prevent attack.
 	 */
 	FILL_RETURN_BUFFER %ebx, RSB_CLEAR_LOOPS, X86_FEATURE_RSB_CTXSW
+#endif
 
 	/* Restore flags or the incoming task to restore AC state. */
 	popfl
@@ -735,7 +740,7 @@ SYM_FUNC_START(schedule_tail_wrapper)
 	popl	%eax
 
 	FRAME_END
-	RET
+	ret
 SYM_FUNC_END(schedule_tail_wrapper)
 .popsection
 
@@ -920,8 +925,10 @@ SYM_FUNC_START(entry_SYSENTER_32)
 	sti
 	sysexit
 
-2:	movl    $0, PT_FS(%esp)
-	jmp     1b
+.pushsection .fixup, "ax"
+2:	movl	$0, PT_FS(%esp)
+	jmp	1b
+.popsection
 	_ASM_EXTABLE(1b, 2b)
 
 .Lsysenter_fix_flags:
@@ -989,7 +996,8 @@ restore_all_switch_stack:
 	 */
 	iret
 
-.Lasm_iret_error:
+.section .fixup, "ax"
+SYM_CODE_START(asm_iret_error)
 	pushl	$0				# no error code
 	pushl	$iret_error
 
@@ -1006,8 +1014,9 @@ restore_all_switch_stack:
 #endif
 
 	jmp	handle_exception
-
-	_ASM_EXTABLE(.Lirq_return, .Lasm_iret_error)
+SYM_CODE_END(asm_iret_error)
+.previous
+	_ASM_EXTABLE(.Lirq_return, asm_iret_error)
 SYM_FUNC_END(entry_INT80_32)
 
 .macro FIXUP_ESPFIX_STACK

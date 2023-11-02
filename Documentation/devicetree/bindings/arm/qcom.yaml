@@ -135,34 +135,28 @@ properties:
           - const: qcom,msm8974
 
       - items:
-          - const: qcom,msm8916-mtp
+          - enum:
+              - alcatel,idol347
           - const: qcom,msm8916-mtp/1
+          - const: qcom,msm8916-mtp
           - const: qcom,msm8916
 
       - items:
           - enum:
-              - alcatel,idol347
+              - longcheer,l8150
               - samsung,a3u-eur
               - samsung,a5u-eur
           - const: qcom,msm8916
 
       - items:
-          - const: longcheer,l8150
-          - const: qcom,msm8916-v1-qrd/9-v1
-          - const: qcom,msm8916
-
-      - items:
           - enum:
               - sony,karin_windy
-          - const: qcom,apq8094
-
-      - items:
-          - enum:
               - sony,karin-row
               - sony,satsuki-row
               - sony,sumire-row
               - sony,suzuran-row
-          - const: qcom,msm8994
+              - qcom,msm8994
+          - const: qcom,apq8094
 
       - items:
           - const: qcom,msm8996-mtp

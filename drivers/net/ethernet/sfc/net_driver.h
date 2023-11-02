@@ -1533,7 +1533,7 @@ static inline bool efx_channel_is_xdp_tx(struct efx_channel *channel)
 
 static inline bool efx_channel_has_tx_queues(struct efx_channel *channel)
 {
-	return channel && channel->channel >= channel->efx->tx_channel_offset;
+	return true;
 }
 
 static inline unsigned int efx_channel_num_tx_queues(struct efx_channel *channel)

@@ -842,7 +842,7 @@ static struct rpmsg_device *rpmsg_virtio_add_ctrl_dev(struct virtio_device *vdev
 
 	err = rpmsg_ctrldev_register_device(rpdev_ctrl);
 	if (err) {
-		/* vch will be free in virtio_rpmsg_release_device() */
+		kfree(vch);
 		return ERR_PTR(err);
 	}
 
@@ -853,7 +853,7 @@ static void rpmsg_virtio_del_ctrl_dev(struct rpmsg_device *rpdev_ctrl)
 {
 	if (!rpdev_ctrl)
 		return;
-	device_unregister(&rpdev_ctrl->dev);
+	kfree(to_virtio_rpmsg_channel(rpdev_ctrl));
 }
 
 static int rpmsg_probe(struct virtio_device *vdev)
@@ -964,8 +964,7 @@ static int rpmsg_probe(struct virtio_device *vdev)
 
 		err = rpmsg_ns_register_device(rpdev_ns);
 		if (err)
-			/* vch will be free in virtio_rpmsg_release_device() */
-			goto free_ctrldev;
+			goto free_vch;
 	}
 
 	/*
@@ -989,6 +988,8 @@ static int rpmsg_probe(struct virtio_device *vdev)
 
 	return 0;
 
+free_vch:
+	kfree(vch);
 free_ctrldev:
 	rpmsg_virtio_del_ctrl_dev(rpdev_ctrl);
 free_coherent:

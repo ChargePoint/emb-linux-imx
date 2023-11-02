@@ -11,11 +11,7 @@ maintainers:
 
 properties:
   compatible:
-    enum:
-      - xlnx,zynq-gpio-1.0
-      - xlnx,zynqmp-gpio-1.0
-      - xlnx,versal-gpio-1.0
-      - xlnx,pmc-gpio-1.0
+    const: xlnx,zynq-gpio-1.0
 
   reg:
     maxItems: 1

@@ -135,8 +135,7 @@ properties:
       Phandle of a companion.
 
   phys:
-    minItems: 1
-    maxItems: 3
+    maxItems: 1
 
   phy-names:
     const: usb

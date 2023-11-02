@@ -154,7 +154,7 @@ print_syscall_enter(struct trace_iterator *iter, int flags,
 			goto end;
 
 		/* parameter types */
-		if (tr && tr->trace_flags & TRACE_ITER_VERBOSE)
+		if (tr->trace_flags & TRACE_ITER_VERBOSE)
 			trace_seq_printf(s, "%s ", entry->types[i]);
 
 		/* parameter values */
@@ -296,7 +296,9 @@ static void ftrace_syscall_enter(void *data, struct pt_regs *regs, long id)
 	struct trace_event_file *trace_file;
 	struct syscall_trace_enter *entry;
 	struct syscall_metadata *sys_data;
-	struct trace_event_buffer fbuffer;
+	struct ring_buffer_event *event;
+	struct trace_buffer *buffer;
+	unsigned int trace_ctx;
 	unsigned long args[6];
 	int syscall_nr;
 	int size;
@@ -319,16 +321,20 @@ static void ftrace_syscall_enter(void *data, struct pt_regs *regs, long id)
 
 	size = sizeof(*entry) + sizeof(unsigned long) * sys_data->nb_args;
 
-	entry = trace_event_buffer_reserve(&fbuffer, trace_file, size);
-	if (!entry)
+	trace_ctx = tracing_gen_ctx();
+
+	event = trace_event_buffer_lock_reserve(&buffer, trace_file,
+			sys_data->enter_event->event.type, size, trace_ctx);
+	if (!event)
 		return;
 
-	entry = ring_buffer_event_data(fbuffer.event);
+	entry = ring_buffer_event_data(event);
 	entry->nr = syscall_nr;
 	syscall_get_arguments(current, regs, args);
 	memcpy(entry->args, args, sizeof(unsigned long) * sys_data->nb_args);
 
-	trace_event_buffer_commit(&fbuffer);
+	event_trigger_unlock_commit(trace_file, buffer, event, entry,
+				    trace_ctx);
 }
 
 static void ftrace_syscall_exit(void *data, struct pt_regs *regs, long ret)
@@ -337,7 +343,9 @@ static void ftrace_syscall_exit(void *data, struct pt_regs *regs, long ret)
 	struct trace_event_file *trace_file;
 	struct syscall_trace_exit *entry;
 	struct syscall_metadata *sys_data;
-	struct trace_event_buffer fbuffer;
+	struct ring_buffer_event *event;
+	struct trace_buffer *buffer;
+	unsigned int trace_ctx;
 	int syscall_nr;
 
 	syscall_nr = trace_get_syscall_nr(current, regs);
@@ -356,15 +364,20 @@ static void ftrace_syscall_exit(void *data, struct pt_regs *regs, long ret)
 	if (!sys_data)
 		return;
 
-	entry = trace_event_buffer_reserve(&fbuffer, trace_file, sizeof(*entry));
-	if (!entry)
+	trace_ctx = tracing_gen_ctx();
+
+	event = trace_event_buffer_lock_reserve(&buffer, trace_file,
+			sys_data->exit_event->event.type, sizeof(*entry),
+			trace_ctx);
+	if (!event)
 		return;
 
-	entry = ring_buffer_event_data(fbuffer.event);
+	entry = ring_buffer_event_data(event);
 	entry->nr = syscall_nr;
 	entry->ret = syscall_get_return_value(current, regs);
 
-	trace_event_buffer_commit(&fbuffer);
+	event_trigger_unlock_commit(trace_file, buffer, event, entry,
+				    trace_ctx);
 }
 
 static int reg_event_syscall_enter(struct trace_event_file *file,

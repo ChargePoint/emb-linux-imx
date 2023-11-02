@@ -358,28 +358,21 @@ of_devfreq_cooling_register_power(struct device_node *np, struct devfreq *df,
 	struct thermal_cooling_device *cdev;
 	struct device *dev = df->dev.parent;
 	struct devfreq_cooling_device *dfc;
-	struct thermal_cooling_device_ops *ops;
 	char *name;
 	int err, num_opps;
 
-	ops = kmemdup(&devfreq_cooling_ops, sizeof(*ops), GFP_KERNEL);
-	if (!ops)
-		return ERR_PTR(-ENOMEM);
-
 	dfc = kzalloc(sizeof(*dfc), GFP_KERNEL);
-	if (!dfc) {
-		err = -ENOMEM;
-		goto free_ops;
-	}
+	if (!dfc)
+		return ERR_PTR(-ENOMEM);
 
 	dfc->devfreq = df;
 
 	dfc->em_pd = em_pd_get(dev);
 	if (dfc->em_pd) {
-		ops->get_requested_power =
+		devfreq_cooling_ops.get_requested_power =
 			devfreq_cooling_get_requested_power;
-		ops->state2power = devfreq_cooling_state2power;
-		ops->power2state = devfreq_cooling_power2state;
+		devfreq_cooling_ops.state2power = devfreq_cooling_state2power;
+		devfreq_cooling_ops.power2state = devfreq_cooling_power2state;
 
 		dfc->power_ops = dfc_power;
 
@@ -414,7 +407,8 @@ of_devfreq_cooling_register_power(struct device_node *np, struct devfreq *df,
 	if (!name)
 		goto remove_qos_req;
 
-	cdev = thermal_of_cooling_device_register(np, name, dfc, ops);
+	cdev = thermal_of_cooling_device_register(np, name, dfc,
+						  &devfreq_cooling_ops);
 	kfree(name);
 
 	if (IS_ERR(cdev)) {
@@ -435,8 +429,6 @@ free_table:
 	kfree(dfc->freq_table);
 free_dfc:
 	kfree(dfc);
-free_ops:
-	kfree(ops);
 
 	return ERR_PTR(err);
 }
@@ -518,13 +510,11 @@ EXPORT_SYMBOL_GPL(devfreq_cooling_em_register);
 void devfreq_cooling_unregister(struct thermal_cooling_device *cdev)
 {
 	struct devfreq_cooling_device *dfc;
-	const struct thermal_cooling_device_ops *ops;
 	struct device *dev;
 
 	if (IS_ERR_OR_NULL(cdev))
 		return;
 
-	ops = cdev->ops;
 	dfc = cdev->devdata;
 	dev = dfc->devfreq->dev.parent;
 
@@ -535,6 +525,5 @@ void devfreq_cooling_unregister(struct thermal_cooling_device *cdev)
 
 	kfree(dfc->freq_table);
 	kfree(dfc);
-	kfree(ops);
 }
 EXPORT_SYMBOL_GPL(devfreq_cooling_unregister);

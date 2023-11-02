@@ -980,10 +980,8 @@ static void mana_process_rx_cqe(struct mana_rxq *rxq, struct mana_cq *cq,
 		break;
 
 	case CQE_RX_TRUNCATED:
-		++ndev->stats.rx_dropped;
-		rxbuf_oob = &rxq->rx_oobs[rxq->buf_index];
-		netdev_warn_once(ndev, "Dropped a truncated packet\n");
-		goto drop;
+		netdev_err(ndev, "Dropped a truncated packet\n");
+		return;
 
 	case CQE_RX_COALESCED_4:
 		netdev_err(ndev, "RX coalescing is unsupported\n");
@@ -1045,7 +1043,6 @@ static void mana_process_rx_cqe(struct mana_rxq *rxq, struct mana_cq *cq,
 
 	mana_rx_skb(old_buf, oob, rxq);
 
-drop:
 	mana_move_wq_tail(rxq->gdma_rq, rxbuf_oob->wqe_inf.wqe_size_in_bu);
 
 	mana_post_pkt_rxq(rxq);

@@ -845,8 +845,9 @@ static enum mapping_status validate_data_csum(struct sock *ssk, struct sk_buff *
 					      bool csum_reqd)
 {
 	struct mptcp_subflow_context *subflow = mptcp_subflow_ctx(ssk);
+	struct csum_pseudo_header header;
 	u32 offset, seq, delta;
-	__sum16 csum;
+	__wsum csum;
 	int len;
 
 	if (!csum_reqd)
@@ -907,20 +908,19 @@ static enum mapping_status validate_data_csum(struct sock *ssk, struct sk_buff *
 	 * while the pseudo header requires the original DSS data len,
 	 * including that
 	 */
-	csum = __mptcp_make_csum(subflow->map_seq,
-				 subflow->map_subflow_seq,
-				 subflow->map_data_len + subflow->map_data_fin,
-				 subflow->map_data_csum);
-	if (unlikely(csum)) {
+	header.data_seq = cpu_to_be64(subflow->map_seq);
+	header.subflow_seq = htonl(subflow->map_subflow_seq);
+	header.data_len = htons(subflow->map_data_len + subflow->map_data_fin);
+	header.csum = 0;
+
+	csum = csum_partial(&header, sizeof(header), subflow->map_data_csum);
+	if (unlikely(csum_fold(csum))) {
 		MPTCP_INC_STATS(sock_net(ssk), MPTCP_MIB_DATACSUMERR);
-		if (subflow->mp_join || subflow->valid_csum_seen) {
-			subflow->send_mp_fail = 1;
-			MPTCP_INC_STATS(sock_net(ssk), MPTCP_MIB_MPFAILTX);
-		}
+		subflow->send_mp_fail = 1;
+		MPTCP_INC_STATS(sock_net(ssk), MPTCP_MIB_MPFAILTX);
 		return subflow->mp_join ? MAPPING_INVALID : MAPPING_DUMMY;
 	}
 
-	subflow->valid_csum_seen = 1;
 	return MAPPING_OK;
 }
 
@@ -1102,18 +1102,6 @@ static void subflow_sched_work_if_closed(struct mptcp_sock *msk, struct sock *ss
 	}
 }
 
-static bool subflow_can_fallback(struct mptcp_subflow_context *subflow)
-{
-	struct mptcp_sock *msk = mptcp_sk(subflow->conn);
-
-	if (subflow->mp_join)
-		return false;
-	else if (READ_ONCE(msk->csum_enabled))
-		return !subflow->valid_csum_seen;
-	else
-		return !subflow->fully_established;
-}
-
 static bool subflow_check_data_avail(struct sock *ssk)
 {
 	struct mptcp_subflow_context *subflow = mptcp_subflow_ctx(ssk);
@@ -1191,7 +1179,7 @@ fallback:
 		return true;
 	}
 
-	if (!subflow_can_fallback(subflow)) {
+	if (subflow->mp_join || subflow->fully_established) {
 		/* fatal protocol error, close the socket.
 		 * subflow_error_report() will introduce the appropriate barriers
 		 */

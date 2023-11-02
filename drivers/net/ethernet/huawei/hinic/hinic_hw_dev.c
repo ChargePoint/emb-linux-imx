@@ -162,6 +162,7 @@ static int init_msix(struct hinic_hwdev *hwdev)
 	struct hinic_hwif *hwif = hwdev->hwif;
 	struct pci_dev *pdev = hwif->pdev;
 	int nr_irqs, num_aeqs, num_ceqs;
+	size_t msix_entries_size;
 	int i, err;
 
 	num_aeqs = HINIC_HWIF_NUM_AEQS(hwif);
@@ -170,8 +171,8 @@ static int init_msix(struct hinic_hwdev *hwdev)
 	if (nr_irqs > HINIC_HWIF_NUM_IRQS(hwif))
 		nr_irqs = HINIC_HWIF_NUM_IRQS(hwif);
 
-	hwdev->msix_entries = devm_kcalloc(&pdev->dev, nr_irqs,
-					   sizeof(*hwdev->msix_entries),
+	msix_entries_size = nr_irqs * sizeof(*hwdev->msix_entries);
+	hwdev->msix_entries = devm_kzalloc(&pdev->dev, msix_entries_size,
 					   GFP_KERNEL);
 	if (!hwdev->msix_entries)
 		return -ENOMEM;

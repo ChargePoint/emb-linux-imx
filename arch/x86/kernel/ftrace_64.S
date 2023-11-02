@@ -132,7 +132,7 @@
 #ifdef CONFIG_DYNAMIC_FTRACE
 
 SYM_FUNC_START(__fentry__)
-	RET
+	retq
 SYM_FUNC_END(__fentry__)
 EXPORT_SYMBOL(__fentry__)
 
@@ -181,10 +181,11 @@ SYM_INNER_LABEL(ftrace_graph_call, SYM_L_GLOBAL)
 
 /*
  * This is weak to keep gas from relaxing the jumps.
+ * It is also used to copy the retq for trampolines.
  */
 SYM_INNER_LABEL_ALIGN(ftrace_stub, SYM_L_WEAK)
 	UNWIND_HINT_FUNC
-	RET
+	retq
 SYM_FUNC_END(ftrace_epilogue)
 
 SYM_FUNC_START(ftrace_regs_caller)
@@ -298,7 +299,7 @@ fgraph_trace:
 #endif
 
 SYM_INNER_LABEL(ftrace_stub, SYM_L_GLOBAL)
-	RET
+	retq
 
 trace:
 	/* save_mcount_regs fills in first two parameters */
@@ -330,11 +331,11 @@ SYM_FUNC_START(ftrace_graph_caller)
 
 	restore_mcount_regs
 
-	RET
+	retq
 SYM_FUNC_END(ftrace_graph_caller)
 
 SYM_FUNC_START(return_to_handler)
-	subq  $16, %rsp
+	subq  $24, %rsp
 
 	/* Save the return values */
 	movq %rax, (%rsp)
@@ -346,19 +347,7 @@ SYM_FUNC_START(return_to_handler)
 	movq %rax, %rdi
 	movq 8(%rsp), %rdx
 	movq (%rsp), %rax
-
-	addq $16, %rsp
-	/*
-	 * Jump back to the old return address. This cannot be JMP_NOSPEC rdi
-	 * since IBT would demand that contain ENDBR, which simply isn't so for
-	 * return addresses. Use a retpoline here to keep the RSB balanced.
-	 */
-	ANNOTATE_INTRA_FUNCTION_CALL
-	call .Ldo_rop
-	int3
-.Ldo_rop:
-	mov %rdi, (%rsp)
-	UNWIND_HINT_FUNC
-	RET
+	addq $24, %rsp
+	JMP_NOSPEC rdi
 SYM_FUNC_END(return_to_handler)
 #endif

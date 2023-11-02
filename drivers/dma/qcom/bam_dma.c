@@ -515,6 +515,14 @@ static int bam_alloc_chan(struct dma_chan *chan)
 	return 0;
 }
 
+static int bam_pm_runtime_get_sync(struct device *dev)
+{
+	if (pm_runtime_enabled(dev))
+		return pm_runtime_get_sync(dev);
+
+	return 0;
+}
+
 /**
  * bam_free_chan - Frees dma resources associated with specific channel
  * @chan: specified channel
@@ -530,7 +538,7 @@ static void bam_free_chan(struct dma_chan *chan)
 	unsigned long flags;
 	int ret;
 
-	ret = pm_runtime_get_sync(bdev->dev);
+	ret = bam_pm_runtime_get_sync(bdev->dev);
 	if (ret < 0)
 		return;
 
@@ -726,7 +734,7 @@ static int bam_pause(struct dma_chan *chan)
 	unsigned long flag;
 	int ret;
 
-	ret = pm_runtime_get_sync(bdev->dev);
+	ret = bam_pm_runtime_get_sync(bdev->dev);
 	if (ret < 0)
 		return ret;
 
@@ -752,7 +760,7 @@ static int bam_resume(struct dma_chan *chan)
 	unsigned long flag;
 	int ret;
 
-	ret = pm_runtime_get_sync(bdev->dev);
+	ret = bam_pm_runtime_get_sync(bdev->dev);
 	if (ret < 0)
 		return ret;
 
@@ -861,7 +869,7 @@ static irqreturn_t bam_dma_irq(int irq, void *data)
 	if (srcs & P_IRQ)
 		tasklet_schedule(&bdev->task);
 
-	ret = pm_runtime_get_sync(bdev->dev);
+	ret = bam_pm_runtime_get_sync(bdev->dev);
 	if (ret < 0)
 		return IRQ_NONE;
 
@@ -979,7 +987,7 @@ static void bam_start_dma(struct bam_chan *bchan)
 	if (!vd)
 		return;
 
-	ret = pm_runtime_get_sync(bdev->dev);
+	ret = bam_pm_runtime_get_sync(bdev->dev);
 	if (ret < 0)
 		return;
 
@@ -1342,6 +1350,11 @@ static int bam_dma_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_unregister_dma;
 
+	if (!bdev->bamclk) {
+		pm_runtime_disable(&pdev->dev);
+		return 0;
+	}
+
 	pm_runtime_irq_safe(&pdev->dev);
 	pm_runtime_set_autosuspend_delay(&pdev->dev, BAM_DMA_AUTOSUSPEND_DELAY);
 	pm_runtime_use_autosuspend(&pdev->dev);
@@ -1425,8 +1438,10 @@ static int __maybe_unused bam_dma_suspend(struct device *dev)
 {
 	struct bam_device *bdev = dev_get_drvdata(dev);
 
-	pm_runtime_force_suspend(dev);
-	clk_unprepare(bdev->bamclk);
+	if (bdev->bamclk) {
+		pm_runtime_force_suspend(dev);
+		clk_unprepare(bdev->bamclk);
+	}
 
 	return 0;
 }
@@ -1436,11 +1451,13 @@ static int __maybe_unused bam_dma_resume(struct device *dev)
 	struct bam_device *bdev = dev_get_drvdata(dev);
 	int ret;
 
-	ret = clk_prepare(bdev->bamclk);
-	if (ret)
-		return ret;
+	if (bdev->bamclk) {
+		ret = clk_prepare(bdev->bamclk);
+		if (ret)
+			return ret;
 
-	pm_runtime_force_resume(dev);
+		pm_runtime_force_resume(dev);
+	}
 
 	return 0;
 }

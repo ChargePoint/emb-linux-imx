@@ -183,7 +183,7 @@
 };
 
 &hdptx0 {
-	lane-mapping = <0x4e>;
+	lane_mapping = <0x4e>;
 	status = "okay";
 };
 

@@ -431,7 +431,8 @@ stmmac_probe_config_dt(struct platform_device *pdev, u8 *mac)
 	plat->phylink_node = np;
 
 	/* Get max speed of operation from device tree */
-	of_property_read_u32(np, "max-speed", &plat->max_speed);
+	if (of_property_read_u32(np, "max-speed", &plat->max_speed))
+		plat->max_speed = -1;
 
 	plat->bus_id = of_alias_get_id(np, "ethernet");
 	if (plat->bus_id < 0)
@@ -813,13 +814,7 @@ static int __maybe_unused stmmac_pltfr_noirq_resume(struct device *dev)
 		if (ret)
 			return ret;
 
-		ret = clk_prepare_enable(priv->plat->clk_ptp_ref);
-		if (ret < 0) {
-			netdev_warn(priv->dev,
-				    "failed to enable PTP reference clock: %pe\n",
-				    ERR_PTR(ret));
-			return ret;
-		}
+		stmmac_init_tstamp_counter(priv, priv->systime_flags);
 	}
 
 	return 0;

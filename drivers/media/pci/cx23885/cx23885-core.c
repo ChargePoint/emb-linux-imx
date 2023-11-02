@@ -2165,7 +2165,7 @@ static int cx23885_initdev(struct pci_dev *pci_dev,
 	err = dma_set_mask(&pci_dev->dev, 0xffffffff);
 	if (err) {
 		pr_err("%s/0: Oops: no 32bit PCI DMA ???\n", dev->name);
-		goto fail_dma_set_mask;
+		goto fail_ctrl;
 	}
 
 	err = request_irq(pci_dev->irq, cx23885_irq,
@@ -2173,7 +2173,7 @@ static int cx23885_initdev(struct pci_dev *pci_dev,
 	if (err < 0) {
 		pr_err("%s: can't get IRQ %d\n",
 		       dev->name, pci_dev->irq);
-		goto fail_dma_set_mask;
+		goto fail_irq;
 	}
 
 	switch (dev->board) {
@@ -2195,7 +2195,7 @@ static int cx23885_initdev(struct pci_dev *pci_dev,
 
 	return 0;
 
-fail_dma_set_mask:
+fail_irq:
 	cx23885_dev_unregister(dev);
 fail_ctrl:
 	v4l2_ctrl_handler_free(hdl);

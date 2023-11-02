@@ -4393,7 +4393,7 @@ gckCOMMAND_DumpExecutingBuffer(
         gcmkPRINT("Command buffer around 0x%08X:", gpuAddress);
 
         /* Align to 4096. */
-        offset -= (gpuAddress & 0x00000fff);
+        offset &= 0xfffff000;
         gpuAddress &= 0xfffff000;
 
         /* Dump max 4096 bytes. */

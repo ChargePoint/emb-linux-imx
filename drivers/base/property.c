@@ -48,14 +48,12 @@ bool fwnode_property_present(const struct fwnode_handle *fwnode,
 {
 	bool ret;
 
-	if (IS_ERR_OR_NULL(fwnode))
-		return false;
-
 	ret = fwnode_call_bool_op(fwnode, property_present, propname);
-	if (ret)
-		return ret;
-
-	return fwnode_call_bool_op(fwnode->secondary, property_present, propname);
+	if (ret == false && !IS_ERR_OR_NULL(fwnode) &&
+	    !IS_ERR_OR_NULL(fwnode->secondary))
+		ret = fwnode_call_bool_op(fwnode->secondary, property_present,
+					 propname);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(fwnode_property_present);
 
@@ -235,16 +233,15 @@ static int fwnode_property_read_int_array(const struct fwnode_handle *fwnode,
 {
 	int ret;
 
-	if (IS_ERR_OR_NULL(fwnode))
-		return -EINVAL;
-
 	ret = fwnode_call_int_op(fwnode, property_read_int_array, propname,
 				 elem_size, val, nval);
-	if (ret != -EINVAL)
-		return ret;
+	if (ret == -EINVAL && !IS_ERR_OR_NULL(fwnode) &&
+	    !IS_ERR_OR_NULL(fwnode->secondary))
+		ret = fwnode_call_int_op(
+			fwnode->secondary, property_read_int_array, propname,
+			elem_size, val, nval);
 
-	return fwnode_call_int_op(fwnode->secondary, property_read_int_array, propname,
-				  elem_size, val, nval);
+	return ret;
 }
 
 /**
@@ -375,16 +372,14 @@ int fwnode_property_read_string_array(const struct fwnode_handle *fwnode,
 {
 	int ret;
 
-	if (IS_ERR_OR_NULL(fwnode))
-		return -EINVAL;
-
 	ret = fwnode_call_int_op(fwnode, property_read_string_array, propname,
 				 val, nval);
-	if (ret != -EINVAL)
-		return ret;
-
-	return fwnode_call_int_op(fwnode->secondary, property_read_string_array, propname,
-				  val, nval);
+	if (ret == -EINVAL && !IS_ERR_OR_NULL(fwnode) &&
+	    !IS_ERR_OR_NULL(fwnode->secondary))
+		ret = fwnode_call_int_op(fwnode->secondary,
+					 property_read_string_array, propname,
+					 val, nval);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(fwnode_property_read_string_array);
 
@@ -484,20 +479,7 @@ int fwnode_property_get_reference_args(const struct fwnode_handle *fwnode,
 				       unsigned int nargs, unsigned int index,
 				       struct fwnode_reference_args *args)
 {
-	int ret;
-
-	if (IS_ERR_OR_NULL(fwnode))
-		return -ENOENT;
-
-	ret = fwnode_call_int_op(fwnode, get_reference_args, prop, nargs_prop,
-				 nargs, index, args);
-	if (ret == 0)
-		return ret;
-
-	if (IS_ERR_OR_NULL(fwnode->secondary))
-		return ret;
-
-	return fwnode_call_int_op(fwnode->secondary, get_reference_args, prop, nargs_prop,
+	return fwnode_call_int_op(fwnode, get_reference_args, prop, nargs_prop,
 				  nargs, index, args);
 }
 EXPORT_SYMBOL_GPL(fwnode_property_get_reference_args);
@@ -693,13 +675,12 @@ EXPORT_SYMBOL_GPL(fwnode_count_parents);
 struct fwnode_handle *fwnode_get_nth_parent(struct fwnode_handle *fwnode,
 					    unsigned int depth)
 {
+	unsigned int i;
+
 	fwnode_handle_get(fwnode);
 
-	do {
-		if (depth-- == 0)
-			break;
+	for (i = 0; i < depth && fwnode; i++)
 		fwnode = fwnode_get_next_parent(fwnode);
-	} while (fwnode);
 
 	return fwnode;
 }
@@ -718,17 +699,17 @@ EXPORT_SYMBOL_GPL(fwnode_get_nth_parent);
 bool fwnode_is_ancestor_of(struct fwnode_handle *test_ancestor,
 				  struct fwnode_handle *test_child)
 {
-	if (IS_ERR_OR_NULL(test_ancestor))
+	if (!test_ancestor)
 		return false;
 
 	fwnode_handle_get(test_child);
-	do {
+	while (test_child) {
 		if (test_child == test_ancestor) {
 			fwnode_handle_put(test_child);
 			return true;
 		}
 		test_child = fwnode_get_next_parent(test_child);
-	} while (test_child);
+	}
 	return false;
 }
 
@@ -757,7 +738,7 @@ fwnode_get_next_available_child_node(const struct fwnode_handle *fwnode,
 {
 	struct fwnode_handle *next_child = child;
 
-	if (IS_ERR_OR_NULL(fwnode))
+	if (!fwnode)
 		return NULL;
 
 	do {
@@ -781,16 +762,16 @@ struct fwnode_handle *device_get_next_child_node(struct device *dev,
 	const struct fwnode_handle *fwnode = dev_fwnode(dev);
 	struct fwnode_handle *next;
 
-	if (IS_ERR_OR_NULL(fwnode))
-		return NULL;
-
 	/* Try to find a child in primary fwnode */
 	next = fwnode_get_next_child_node(fwnode, child);
 	if (next)
 		return next;
 
 	/* When no more children in primary, continue with secondary */
-	return fwnode_get_next_child_node(fwnode->secondary, child);
+	if (fwnode && !IS_ERR_OR_NULL(fwnode->secondary))
+		next = fwnode_get_next_child_node(fwnode->secondary, child);
+
+	return next;
 }
 EXPORT_SYMBOL_GPL(device_get_next_child_node);
 
@@ -857,9 +838,6 @@ EXPORT_SYMBOL_GPL(fwnode_handle_put);
  */
 bool fwnode_device_is_available(const struct fwnode_handle *fwnode)
 {
-	if (IS_ERR_OR_NULL(fwnode))
-		return false;
-
 	if (!fwnode_has_op(fwnode, device_is_available))
 		return true;
 
@@ -1067,14 +1045,14 @@ fwnode_graph_get_next_endpoint(const struct fwnode_handle *fwnode,
 		parent = fwnode_graph_get_port_parent(prev);
 	else
 		parent = fwnode;
-	if (IS_ERR_OR_NULL(parent))
-		return NULL;
 
 	ep = fwnode_call_ptr_op(parent, graph_get_next_endpoint, prev);
-	if (ep)
-		return ep;
 
-	return fwnode_graph_get_next_endpoint(parent->secondary, NULL);
+	if (IS_ERR_OR_NULL(ep) &&
+	    !IS_ERR_OR_NULL(parent) && !IS_ERR_OR_NULL(parent->secondary))
+		ep = fwnode_graph_get_next_endpoint(parent->secondary, NULL);
+
+	return ep;
 }
 EXPORT_SYMBOL_GPL(fwnode_graph_get_next_endpoint);
 

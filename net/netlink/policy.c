@@ -144,7 +144,7 @@ int netlink_policy_dump_add_policy(struct netlink_policy_dump_state **pstate,
 
 	err = add_policy(&state, policy, maxtype);
 	if (err)
-		goto err_try_undo;
+		return err;
 
 	for (policy_idx = 0;
 	     policy_idx < state->n_alloc && state->policies[policy_idx].policy;
@@ -164,7 +164,7 @@ int netlink_policy_dump_add_policy(struct netlink_policy_dump_state **pstate,
 						 policy[type].nested_policy,
 						 policy[type].len);
 				if (err)
-					goto err_try_undo;
+					return err;
 				break;
 			default:
 				break;
@@ -174,16 +174,6 @@ int netlink_policy_dump_add_policy(struct netlink_policy_dump_state **pstate,
 
 	*pstate = state;
 	return 0;
-
-err_try_undo:
-	/* Try to preserve reasonable unwind semantics - if we're starting from
-	 * scratch clean up fully, otherwise record what we got and caller will.
-	 */
-	if (!*pstate)
-		netlink_policy_dump_free(state);
-	else
-		*pstate = state;
-	return err;
 }
 
 static bool

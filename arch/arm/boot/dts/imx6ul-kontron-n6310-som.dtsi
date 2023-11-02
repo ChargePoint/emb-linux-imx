@@ -19,7 +19,7 @@
 };
 
 &qspi {
-	flash@0 {
+	spi-flash@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "spi-nand";

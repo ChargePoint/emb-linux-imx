@@ -1603,11 +1603,8 @@ static int ccs_power_on(struct device *dev)
 			usleep_range(1000, 2000);
 		} while (--retry);
 
-		if (!reset) {
-			dev_err(dev, "software reset failed\n");
-			rval = -EIO;
-			goto out_cci_addr_fail;
-		}
+		if (!reset)
+			return -EIO;
 	}
 
 	if (sensor->hwcfg.i2c_addr_alt) {

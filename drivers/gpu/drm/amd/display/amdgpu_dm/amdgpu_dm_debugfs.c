@@ -229,10 +229,8 @@ static ssize_t dp_link_settings_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -390,10 +388,8 @@ static ssize_t dp_phy_settings_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user((*(rd_buf + result)), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -1320,10 +1316,8 @@ static ssize_t dp_dsc_clock_en_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -1339,10 +1333,8 @@ static ssize_t dp_dsc_clock_en_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -1511,10 +1503,8 @@ static ssize_t dp_dsc_slice_width_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -1530,10 +1520,8 @@ static ssize_t dp_dsc_slice_width_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -1700,10 +1688,8 @@ static ssize_t dp_dsc_slice_height_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -1719,10 +1705,8 @@ static ssize_t dp_dsc_slice_height_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -1885,10 +1869,8 @@ static ssize_t dp_dsc_bits_per_pixel_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -1904,10 +1886,8 @@ static ssize_t dp_dsc_bits_per_pixel_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -2065,10 +2045,8 @@ static ssize_t dp_dsc_pic_width_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -2084,10 +2062,8 @@ static ssize_t dp_dsc_pic_width_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -2126,10 +2102,8 @@ static ssize_t dp_dsc_pic_height_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -2145,10 +2119,8 @@ static ssize_t dp_dsc_pic_height_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -2202,10 +2174,8 @@ static ssize_t dp_dsc_chunk_size_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -2221,10 +2191,8 @@ static ssize_t dp_dsc_chunk_size_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -2278,10 +2246,8 @@ static ssize_t dp_dsc_slice_bpg_offset_read(struct file *f, char __user *buf,
 				break;
 	}
 
-	if (!pipe_ctx) {
-		kfree(rd_buf);
+	if (!pipe_ctx)
 		return -ENXIO;
-	}
 
 	dsc = pipe_ctx->stream_res.dsc;
 	if (dsc)
@@ -2297,10 +2263,8 @@ static ssize_t dp_dsc_slice_bpg_offset_read(struct file *f, char __user *buf,
 			break;
 
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 
 		buf += 1;
 		size -= 1;
@@ -3007,7 +2971,7 @@ void crtc_debugfs_init(struct drm_crtc *crtc)
 				   &crc_win_y_end_fops);
 	debugfs_create_file_unsafe("crc_win_update", 0644, dir, crtc,
 				   &crc_win_update_fops);
-	dput(dir);
+
 }
 #endif
 /*
@@ -3290,10 +3254,8 @@ static ssize_t dcc_en_bits_read(
 	dc->hwss.get_dcc_en_bits(dc, dcc_en_bits);
 
 	rd_buf = kcalloc(rd_buf_size, sizeof(char), GFP_KERNEL);
-	if (!rd_buf) {
-		kfree(dcc_en_bits);
+	if (!rd_buf)
 		return -ENOMEM;
-	}
 
 	for (i = 0; i < num_pipes; i++)
 		offset += snprintf(rd_buf + offset, rd_buf_size - offset,
@@ -3306,10 +3268,8 @@ static ssize_t dcc_en_bits_read(
 		if (*pos >= rd_buf_size)
 			break;
 		r = put_user(*(rd_buf + result), buf);
-		if (r) {
-			kfree(rd_buf);
+		if (r)
 			return r; /* r = -EFAULT */
-		}
 		buf += 1;
 		size -= 1;
 		*pos += 1;

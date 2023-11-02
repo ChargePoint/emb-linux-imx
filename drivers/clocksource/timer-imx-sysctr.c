@@ -134,10 +134,8 @@ static int __init sysctr_timer_init(struct device_node *np)
 	if (ret)
 		return ret;
 
-	/* check if need to adjust the rate */
-	if (!of_property_read_bool(np, "no-divider"))
-		/* system counter clock is divided by 3 internally */
-		to_sysctr.of_clk.rate /= SYS_CTR_CLK_DIV;
+	/* system counter clock is divided by 3 internally */
+	to_sysctr.of_clk.rate /= SYS_CTR_CLK_DIV;
 
 	sys_ctr_base = timer_of_base(&to_sysctr);
 	cmpcr = readl(sys_ctr_base + CMPCR);

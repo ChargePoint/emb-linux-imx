@@ -157,8 +157,8 @@ static int aspeed_scu_ic_of_init_common(struct aspeed_scu_ic *scu_ic,
 	}
 
 	irq = irq_of_parse_and_map(node, 0);
-	if (!irq) {
-		rc = -EINVAL;
+	if (irq < 0) {
+		rc = irq;
 		goto err;
 	}
 

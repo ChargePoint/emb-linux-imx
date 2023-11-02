@@ -50,7 +50,6 @@ static struct dentry *zcore_reipl_file;
 static struct dentry *zcore_hsa_file;
 static struct ipl_parameter_block *zcore_ipl_block;
 
-static DEFINE_MUTEX(hsa_buf_mutex);
 static char hsa_buf[PAGE_SIZE] __aligned(PAGE_SIZE);
 
 /*
@@ -67,24 +66,19 @@ int memcpy_hsa_user(void __user *dest, unsigned long src, size_t count)
 	if (!hsa_available)
 		return -ENODATA;
 
-	mutex_lock(&hsa_buf_mutex);
 	while (count) {
 		if (sclp_sdias_copy(hsa_buf, src / PAGE_SIZE + 2, 1)) {
 			TRACE("sclp_sdias_copy() failed\n");
-			mutex_unlock(&hsa_buf_mutex);
 			return -EIO;
 		}
 		offset = src % PAGE_SIZE;
 		bytes = min(PAGE_SIZE - offset, count);
-		if (copy_to_user(dest, hsa_buf + offset, bytes)) {
-			mutex_unlock(&hsa_buf_mutex);
+		if (copy_to_user(dest, hsa_buf + offset, bytes))
 			return -EFAULT;
-		}
 		src += bytes;
 		dest += bytes;
 		count -= bytes;
 	}
-	mutex_unlock(&hsa_buf_mutex);
 	return 0;
 }
 
@@ -102,11 +96,9 @@ int memcpy_hsa_kernel(void *dest, unsigned long src, size_t count)
 	if (!hsa_available)
 		return -ENODATA;
 
-	mutex_lock(&hsa_buf_mutex);
 	while (count) {
 		if (sclp_sdias_copy(hsa_buf, src / PAGE_SIZE + 2, 1)) {
 			TRACE("sclp_sdias_copy() failed\n");
-			mutex_unlock(&hsa_buf_mutex);
 			return -EIO;
 		}
 		offset = src % PAGE_SIZE;
@@ -116,7 +108,6 @@ int memcpy_hsa_kernel(void *dest, unsigned long src, size_t count)
 		dest += bytes;
 		count -= bytes;
 	}
-	mutex_unlock(&hsa_buf_mutex);
 	return 0;
 }
 
@@ -238,7 +229,8 @@ static int __init zcore_reipl_init(void)
 		rc = memcpy_hsa_kernel(zcore_ipl_block, ipib_info.ipib,
 				       PAGE_SIZE);
 	else
-		rc = memcpy_real(zcore_ipl_block, ipib_info.ipib, PAGE_SIZE);
+		rc = memcpy_real(zcore_ipl_block, (void *) ipib_info.ipib,
+				 PAGE_SIZE);
 	if (rc || (__force u32)csum_partial(zcore_ipl_block, zcore_ipl_block->hdr.len, 0) !=
 	    ipib_info.checksum) {
 		TRACE("Checksum does not match\n");

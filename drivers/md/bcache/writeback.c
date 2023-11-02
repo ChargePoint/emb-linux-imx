@@ -802,11 +802,13 @@ static int bch_writeback_thread(void *arg)
 
 /* Init */
 #define INIT_KEYS_EACH_TIME	500000
+#define INIT_KEYS_SLEEP_MS	100
 
 struct sectors_dirty_init {
 	struct btree_op	op;
 	unsigned int	inode;
 	size_t		count;
+	struct bkey	start;
 };
 
 static int sectors_dirty_init_fn(struct btree_op *_op, struct btree *b,
@@ -822,8 +824,11 @@ static int sectors_dirty_init_fn(struct btree_op *_op, struct btree *b,
 					     KEY_START(k), KEY_SIZE(k));
 
 	op->count++;
-	if (!(op->count % INIT_KEYS_EACH_TIME))
-		cond_resched();
+	if (atomic_read(&b->c->search_inflight) &&
+	    !(op->count % INIT_KEYS_EACH_TIME)) {
+		bkey_copy_key(&op->start, k);
+		return -EAGAIN;
+	}
 
 	return MAP_CONTINUE;
 }
@@ -838,16 +843,24 @@ static int bch_root_node_dirty_init(struct cache_set *c,
 	bch_btree_op_init(&op.op, -1);
 	op.inode = d->id;
 	op.count = 0;
+	op.start = KEY(op.inode, 0, 0);
 
-	ret = bcache_btree(map_keys_recurse,
-			   k,
-			   c->root,
-			   &op.op,
-			   &KEY(op.inode, 0, 0),
-			   sectors_dirty_init_fn,
-			   0);
-	if (ret < 0)
-		pr_warn("sectors dirty init failed, ret=%d!\n", ret);
+	do {
+		ret = bcache_btree(map_keys_recurse,
+				   k,
+				   c->root,
+				   &op.op,
+				   &op.start,
+				   sectors_dirty_init_fn,
+				   0);
+		if (ret == -EAGAIN)
+			schedule_timeout_interruptible(
+				msecs_to_jiffies(INIT_KEYS_SLEEP_MS));
+		else if (ret < 0) {
+			pr_warn("sectors dirty init failed, ret=%d!\n", ret);
+			break;
+		}
+	} while (ret == -EAGAIN);
 
 	return ret;
 }
@@ -891,6 +904,7 @@ static int bch_dirty_init_thread(void *arg)
 				goto out;
 			}
 			skip_nr--;
+			cond_resched();
 		}
 
 		if (p) {
@@ -900,6 +914,7 @@ static int bch_dirty_init_thread(void *arg)
 
 		p = NULL;
 		prev_idx = cur_idx;
+		cond_resched();
 	}
 
 out:
@@ -930,56 +945,65 @@ void bch_sectors_dirty_init(struct bcache_device *d)
 	struct btree_iter iter;
 	struct sectors_dirty_init op;
 	struct cache_set *c = d->c;
-	struct bch_dirty_init_state state;
+	struct bch_dirty_init_state *state;
+	char name[32];
 
 	/* Just count root keys if no leaf node */
-	rw_lock(0, c->root, c->root->level);
 	if (c->root->level == 0) {
 		bch_btree_op_init(&op.op, -1);
 		op.inode = d->id;
 		op.count = 0;
+		op.start = KEY(op.inode, 0, 0);
 
 		for_each_key_filter(&c->root->keys,
 				    k, &iter, bch_ptr_invalid)
 			sectors_dirty_init_fn(&op.op, c->root, k);
-
-		rw_unlock(0, c->root);
 		return;
 	}
 
-	memset(&state, 0, sizeof(struct bch_dirty_init_state));
-	state.c = c;
-	state.d = d;
-	state.total_threads = bch_btre_dirty_init_thread_nr();
-	state.key_idx = 0;
-	spin_lock_init(&state.idx_lock);
-	atomic_set(&state.started, 0);
-	atomic_set(&state.enough, 0);
-	init_waitqueue_head(&state.wait);
-
-	for (i = 0; i < state.total_threads; i++) {
-		/* Fetch latest state.enough earlier */
-		smp_mb__before_atomic();
-		if (atomic_read(&state.enough))
-			break;
-
-		state.infos[i].state = &state;
-		state.infos[i].thread =
-			kthread_run(bch_dirty_init_thread, &state.infos[i],
-				    "bch_dirtcnt[%d]", i);
-		if (IS_ERR(state.infos[i].thread)) {
-			pr_err("fails to run thread bch_dirty_init[%d]\n", i);
-			for (--i; i >= 0; i--)
-				kthread_stop(state.infos[i].thread);
-			goto out;
-		}
-		atomic_inc(&state.started);
+	state = kzalloc(sizeof(struct bch_dirty_init_state), GFP_KERNEL);
+	if (!state) {
+		pr_warn("sectors dirty init failed: cannot allocate memory\n");
+		return;
 	}
 
+	state->c = c;
+	state->d = d;
+	state->total_threads = bch_btre_dirty_init_thread_nr();
+	state->key_idx = 0;
+	spin_lock_init(&state->idx_lock);
+	atomic_set(&state->started, 0);
+	atomic_set(&state->enough, 0);
+	init_waitqueue_head(&state->wait);
+
+	for (i = 0; i < state->total_threads; i++) {
+		/* Fetch latest state->enough earlier */
+		smp_mb__before_atomic();
+		if (atomic_read(&state->enough))
+			break;
+
+		state->infos[i].state = state;
+		atomic_inc(&state->started);
+		snprintf(name, sizeof(name), "bch_dirty_init[%d]", i);
+
+		state->infos[i].thread =
+			kthread_run(bch_dirty_init_thread,
+				    &state->infos[i],
+				    name);
+		if (IS_ERR(state->infos[i].thread)) {
+			pr_err("fails to run thread bch_dirty_init[%d]\n", i);
+			for (--i; i >= 0; i--)
+				kthread_stop(state->infos[i].thread);
+			goto out;
+		}
+	}
+
+	wait_event_interruptible(state->wait,
+		 atomic_read(&state->started) == 0 ||
+		 test_bit(CACHE_SET_IO_DISABLE, &c->flags));
+
 out:
-	/* Must wait for all threads to stop. */
-	wait_event(state.wait, atomic_read(&state.started) == 0);
-	rw_unlock(0, c->root);
+	kfree(state);
 }
 
 void bch_cached_dev_writeback_init(struct cached_dev *dc)

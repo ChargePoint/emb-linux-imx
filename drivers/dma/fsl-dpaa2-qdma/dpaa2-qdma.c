@@ -584,7 +584,6 @@ static void dpaa2_dpdmai_free_comp(struct dpaa2_qdma_chan *qchan,
 static void dpaa2_dpdmai_free_channels(struct dpaa2_qdma_engine *dpaa2_qdma)
 {
 	struct dpaa2_qdma_chan *qchan;
-	struct dma_chan	*chan;
 	int num, i;
 
 	num = dpaa2_qdma->n_chans;
@@ -595,9 +594,6 @@ static void dpaa2_dpdmai_free_channels(struct dpaa2_qdma_engine *dpaa2_qdma)
 		dma_pool_destroy(qchan->fd_pool);
 		dma_pool_destroy(qchan->fl_pool);
 		dma_pool_destroy(qchan->sdd_pool);
-		chan = &qchan->vchan.chan;
-		if (chan->client_count)
-			chan->client_count--;
 	}
 }
 

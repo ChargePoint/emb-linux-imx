@@ -18,6 +18,7 @@
 #include <asm/prom.h>
 #include <asm/kdump.h>
 #include <mm/mmu_decl.h>
+#include <generated/compile.h>
 #include <generated/utsrelease.h>
 
 struct regions {
@@ -34,6 +35,10 @@ struct regions {
 	int reserved_mem_addr_cells;
 	int reserved_mem_size_cells;
 };
+
+/* Simplified build-specific string for starting entropy. */
+static const char build_str[] = UTS_RELEASE " (" LINUX_COMPILE_BY "@"
+		LINUX_COMPILE_HOST ") (" LINUX_COMPILER ") " UTS_VERSION;
 
 struct regions __initdata regions;
 
@@ -67,8 +72,7 @@ static unsigned long __init get_boot_seed(void *fdt)
 {
 	unsigned long hash = 0;
 
-	/* build-specific string for starting entropy. */
-	hash = rotate_xor(hash, linux_banner, strlen(linux_banner));
+	hash = rotate_xor(hash, build_str, sizeof(build_str));
 	hash = rotate_xor(hash, fdt, fdt_totalsize(fdt));
 
 	return hash;

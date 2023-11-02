@@ -101,9 +101,8 @@ static inline struct device_node *of_cpu_device_node_get(int cpu)
 }
 
 static inline int of_dma_configure_id(struct device *dev,
-				      struct device_node *np,
-				      bool force_dma,
-				      const u32 *id)
+				   struct device_node *np,
+				   bool force_dma)
 {
 	return 0;
 }

@@ -1181,7 +1181,6 @@ proto_again:
 					 VLAN_PRIO_MASK) >> VLAN_PRIO_SHIFT;
 			}
 			key_vlan->vlan_tpid = saved_vlan_tpid;
-			key_vlan->vlan_eth_type = proto;
 		}
 
 		fdret = FLOW_DISSECT_RET_PROTO_AGAIN;
@@ -1519,8 +1518,9 @@ static inline void __flow_hash_consistentify(struct flow_keys *keys)
 
 	switch (keys->control.addr_type) {
 	case FLOW_DISSECTOR_KEY_IPV4_ADDRS:
-		if ((__force u32)keys->addrs.v4addrs.dst <
-		    (__force u32)keys->addrs.v4addrs.src)
+		addr_diff = (__force u32)keys->addrs.v4addrs.dst -
+			    (__force u32)keys->addrs.v4addrs.src;
+		if (addr_diff < 0)
 			swap(keys->addrs.v4addrs.src, keys->addrs.v4addrs.dst);
 
 		if ((__force u16)keys->ports.dst <

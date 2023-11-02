@@ -34,8 +34,6 @@ properties:
       - qcom,rpm-ipq6018
       - qcom,rpm-msm8226
       - qcom,rpm-msm8916
-      - qcom,rpm-msm8936
-      - qcom,rpm-msm8953
       - qcom,rpm-msm8974
       - qcom,rpm-msm8976
       - qcom,rpm-msm8996
@@ -59,7 +57,6 @@ if:
           - qcom,rpm-apq8084
           - qcom,rpm-msm8916
           - qcom,rpm-msm8974
-          - qcom,rpm-msm8953
 then:
   required:
     - qcom,smd-channels
