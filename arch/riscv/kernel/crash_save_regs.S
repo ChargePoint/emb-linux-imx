@@ -44,7 +44,7 @@ SYM_CODE_START(riscv_crash_save_regs)
 	REG_S t6,  PT_T6(a0)	/* x31 */
 
 	csrr t1, CSR_STATUS
-	auipc t2, 0x0
+	csrr t2, CSR_EPC
 	csrr t3, CSR_TVAL
 	csrr t4, CSR_CAUSE
 

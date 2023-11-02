@@ -245,7 +245,7 @@ static int populate_node(const void *blob,
 	}
 
 	*pnp = np;
-	return 0;
+	return true;
 }
 
 static void reverse_nodes(struct device_node *parent)
@@ -313,7 +313,7 @@ static int unflatten_dt_nodes(const void *blob,
 	for (offset = 0;
 	     offset >= 0 && depth >= initial_depth;
 	     offset = fdt_next_node(blob, offset, &depth)) {
-		if (WARN_ON_ONCE(depth >= FDT_MAX_DEPTH - 1))
+		if (WARN_ON_ONCE(depth >= FDT_MAX_DEPTH))
 			continue;
 
 		if (!IS_ENABLED(CONFIG_OF_KOBJ) &&

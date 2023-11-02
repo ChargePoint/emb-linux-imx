@@ -80,7 +80,6 @@ struct mlxbf_gige {
 	struct net_device *netdev;
 	struct platform_device *pdev;
 	void __iomem *mdio_io;
-	void __iomem *clk_io;
 	struct mii_bus *mdiobus;
 	void __iomem *gpio_io;
 	struct irq_domain *irqdomain;
@@ -150,8 +149,7 @@ enum mlxbf_gige_res {
 	MLXBF_GIGE_RES_MDIO9,
 	MLXBF_GIGE_RES_GPIO0,
 	MLXBF_GIGE_RES_LLU,
-	MLXBF_GIGE_RES_PLU,
-	MLXBF_GIGE_RES_CLK
+	MLXBF_GIGE_RES_PLU
 };
 
 /* Version of register data returned by mlxbf_gige_get_regs() */

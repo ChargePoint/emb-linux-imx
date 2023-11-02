@@ -375,8 +375,8 @@ static int axp288_extcon_probe(struct platform_device *pdev)
 		if (adev) {
 			info->id_extcon = extcon_get_extcon_dev(acpi_dev_name(adev));
 			put_device(&adev->dev);
-			if (IS_ERR(info->id_extcon))
-				return PTR_ERR(info->id_extcon);
+			if (!info->id_extcon)
+				return -EPROBE_DEFER;
 
 			dev_info(dev, "controlling USB role\n");
 		} else {

@@ -468,9 +468,9 @@ static const struct dbc_driver dbc_driver = {
 	.disconnect		= xhci_dbc_tty_unregister_device,
 };
 
-int xhci_dbc_tty_probe(struct device *dev, void __iomem *base, struct xhci_hcd *xhci)
+int xhci_dbc_tty_probe(struct xhci_hcd *xhci)
 {
-	struct xhci_dbc		*dbc;
+	struct xhci_dbc		*dbc = xhci->dbc;
 	struct dbc_port		*port;
 	int			status;
 
@@ -485,22 +485,13 @@ int xhci_dbc_tty_probe(struct device *dev, void __iomem *base, struct xhci_hcd *
 		goto out;
 	}
 
-	dbc_tty_driver->driver_state = port;
-
-	dbc = xhci_alloc_dbc(dev, base, &dbc_driver);
-	if (!dbc) {
-		status = -ENOMEM;
-		goto out2;
-	}
-
+	dbc->driver = &dbc_driver;
 	dbc->priv = port;
 
-	/* get rid of xhci once this is a real driver binding to a device */
-	xhci->dbc = dbc;
+
+	dbc_tty_driver->driver_state = port;
 
 	return 0;
-out2:
-	kfree(port);
 out:
 	/* dbc_tty_exit will be called by module_exit() in the future */
 	dbc_tty_exit();
@@ -515,7 +506,8 @@ void xhci_dbc_tty_remove(struct xhci_dbc *dbc)
 {
 	struct dbc_port         *port = dbc_to_port(dbc);
 
-	xhci_dbc_remove(dbc);
+	dbc->driver = NULL;
+	dbc->priv = NULL;
 	kfree(port);
 
 	/* dbc_tty_exit will be called by  module_exit() in the future */

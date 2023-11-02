@@ -1174,17 +1174,13 @@ static int ctrl_dumppolicy_start(struct netlink_callback *cb)
 							     op.policy,
 							     op.maxattr);
 			if (err)
-				goto err_free_state;
+				return err;
 		}
 	}
 
 	if (!ctx->state)
 		return -ENODATA;
 	return 0;
-
-err_free_state:
-	netlink_policy_dump_free(ctx->state);
-	return err;
 }
 
 static void *ctrl_dumppolicy_prep(struct sk_buff *skb,

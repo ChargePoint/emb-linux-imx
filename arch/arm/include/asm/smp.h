@@ -25,6 +25,11 @@ struct seq_file;
 extern void show_ipi_list(struct seq_file *, int);
 
 /*
+ * Called from assembly code, this handles an IPI.
+ */
+asmlinkage void do_IPI(int ipinr, struct pt_regs *regs);
+
+/*
  * Called from C code, this handles an IPI.
  */
 void handle_IPI(int ipinr, struct pt_regs *regs);

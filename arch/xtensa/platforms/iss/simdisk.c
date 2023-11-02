@@ -212,18 +212,12 @@ static ssize_t proc_read_simdisk(struct file *file, char __user *buf,
 	struct simdisk *dev = PDE_DATA(file_inode(file));
 	const char *s = dev->filename;
 	if (s) {
-		ssize_t len = strlen(s);
-		char *temp = kmalloc(len + 2, GFP_KERNEL);
-
-		if (!temp)
-			return -ENOMEM;
-
-		len = scnprintf(temp, len + 2, "%s\n", s);
-		len = simple_read_from_buffer(buf, size, ppos,
-					      temp, len);
-
-		kfree(temp);
-		return len;
+		ssize_t n = simple_read_from_buffer(buf, size, ppos,
+							s, strlen(s));
+		if (n < 0)
+			return n;
+		buf += n;
+		size -= n;
 	}
 	return simple_read_from_buffer(buf, size, ppos, "\n", 1);
 }

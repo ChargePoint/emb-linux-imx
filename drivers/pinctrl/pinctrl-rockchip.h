@@ -171,7 +171,7 @@ struct rockchip_pin_bank {
 	u32				toggle_edge_mode;
 	u32				recalced_mask;
 	u32				route_mask;
-	struct list_head		deferred_pins;
+	struct list_head		deferred_output;
 	struct mutex			deferred_lock;
 };
 
@@ -247,12 +247,9 @@ struct rockchip_pin_config {
 	unsigned int		nconfigs;
 };
 
-enum pin_config_param;
-
-struct rockchip_pin_deferred {
+struct rockchip_pin_output_deferred {
 	struct list_head head;
 	unsigned int pin;
-	enum pin_config_param param;
 	u32 arg;
 };
 

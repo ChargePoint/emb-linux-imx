@@ -3007,11 +3007,17 @@ static int __init allocate_lpi_tables(void)
 	return 0;
 }
 
-static u64 read_vpend_dirty_clear(void __iomem *vlpi_base)
+static u64 its_clear_vpend_valid(void __iomem *vlpi_base, u64 clr, u64 set)
 {
 	u32 count = 1000000;	/* 1s! */
 	bool clean;
 	u64 val;
+
+	val = gicr_read_vpendbaser(vlpi_base + GICR_VPENDBASER);
+	val &= ~GICR_VPENDBASER_Valid;
+	val &= ~clr;
+	val |= set;
+	gicr_write_vpendbaser(val, vlpi_base + GICR_VPENDBASER);
 
 	do {
 		val = gicr_read_vpendbaser(vlpi_base + GICR_VPENDBASER);
@@ -3023,26 +3029,10 @@ static u64 read_vpend_dirty_clear(void __iomem *vlpi_base)
 		}
 	} while (!clean && count);
 
-	if (unlikely(!clean))
+	if (unlikely(val & GICR_VPENDBASER_Dirty)) {
 		pr_err_ratelimited("ITS virtual pending table not cleaning\n");
-
-	return val;
-}
-
-static u64 its_clear_vpend_valid(void __iomem *vlpi_base, u64 clr, u64 set)
-{
-	u64 val;
-
-	/* Make sure we wait until the RD is done with the initial scan */
-	val = read_vpend_dirty_clear(vlpi_base);
-	val &= ~GICR_VPENDBASER_Valid;
-	val &= ~clr;
-	val |= set;
-	gicr_write_vpendbaser(val, vlpi_base + GICR_VPENDBASER);
-
-	val = read_vpend_dirty_clear(vlpi_base);
-	if (unlikely(val & GICR_VPENDBASER_Dirty))
 		val |= GICR_VPENDBASER_PendingLast;
+	}
 
 	return val;
 }

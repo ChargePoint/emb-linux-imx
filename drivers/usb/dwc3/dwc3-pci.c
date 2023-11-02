@@ -43,10 +43,7 @@
 #define PCI_DEVICE_ID_INTEL_ADLP		0x51ee
 #define PCI_DEVICE_ID_INTEL_ADLM		0x54ee
 #define PCI_DEVICE_ID_INTEL_ADLS		0x7ae1
-#define PCI_DEVICE_ID_INTEL_RPL			0x460e
 #define PCI_DEVICE_ID_INTEL_RPLS		0x7a61
-#define PCI_DEVICE_ID_INTEL_MTLP		0x7ec1
-#define PCI_DEVICE_ID_INTEL_MTL			0x7e7e
 #define PCI_DEVICE_ID_INTEL_TGL			0x9a15
 #define PCI_DEVICE_ID_AMD_MR			0x163a
 
@@ -188,8 +185,7 @@ static const struct software_node dwc3_pci_amd_mr_swnode = {
 	.properties = dwc3_pci_mr_properties,
 };
 
-static int dwc3_pci_quirks(struct dwc3_pci *dwc,
-			   const struct software_node *swnode)
+static int dwc3_pci_quirks(struct dwc3_pci *dwc)
 {
 	struct pci_dev			*pdev = dwc->pci;
 
@@ -246,7 +242,7 @@ static int dwc3_pci_quirks(struct dwc3_pci *dwc,
 		}
 	}
 
-	return device_add_software_node(&dwc->dwc3->dev, swnode);
+	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -257,7 +253,7 @@ static void dwc3_pci_resume_work(struct work_struct *work)
 	int ret;
 
 	ret = pm_runtime_get_sync(&dwc3->dev);
-	if (ret < 0) {
+	if (ret) {
 		pm_runtime_put_sync_autosuspend(&dwc3->dev);
 		return;
 	}
@@ -311,7 +307,11 @@ static int dwc3_pci_probe(struct pci_dev *pci, const struct pci_device_id *id)
 	dwc->dwc3->dev.parent = dev;
 	ACPI_COMPANION_SET(&dwc->dwc3->dev, ACPI_COMPANION(dev));
 
-	ret = dwc3_pci_quirks(dwc, (void *)id->driver_data);
+	ret = device_add_software_node(&dwc->dwc3->dev, (void *)id->driver_data);
+	if (ret < 0)
+		goto err;
+
+	ret = dwc3_pci_quirks(dwc);
 	if (ret)
 		goto err;
 
@@ -421,16 +421,7 @@ static const struct pci_device_id dwc3_pci_id_table[] = {
 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ADLS),
 	  (kernel_ulong_t) &dwc3_pci_intel_swnode, },
 
-	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_RPL),
-	  (kernel_ulong_t) &dwc3_pci_intel_swnode, },
-
 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_RPLS),
-	  (kernel_ulong_t) &dwc3_pci_intel_swnode, },
-
-	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_MTLP),
-	  (kernel_ulong_t) &dwc3_pci_intel_swnode, },
-
-	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_MTL),
 	  (kernel_ulong_t) &dwc3_pci_intel_swnode, },
 
 	{ PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_TGL),

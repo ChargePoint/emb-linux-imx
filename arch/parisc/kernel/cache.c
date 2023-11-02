@@ -46,6 +46,9 @@ void flush_icache_page_asm(unsigned long phys_addr, unsigned long vaddr);
  */
 DEFINE_SPINLOCK(pa_tlb_flush_lock);
 
+/* Swapper page setup lock. */
+DEFINE_SPINLOCK(pa_swapper_pg_lock);
+
 #if defined(CONFIG_64BIT) && defined(CONFIG_SMP)
 int pa_serialize_tlb_flushes __ro_after_init;
 #endif

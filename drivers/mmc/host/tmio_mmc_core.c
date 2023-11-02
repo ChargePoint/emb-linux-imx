@@ -179,17 +179,8 @@ static void tmio_mmc_set_bus_width(struct tmio_mmc_host *host,
 	sd_ctrl_write16(host, CTL_SD_MEM_CARD_OPT, reg);
 }
 
-static void tmio_mmc_reset(struct tmio_mmc_host *host, bool preserve)
+static void tmio_mmc_reset(struct tmio_mmc_host *host)
 {
-	u16 card_opt, clk_ctrl, sdif_mode;
-
-	if (preserve) {
-		card_opt = sd_ctrl_read16(host, CTL_SD_MEM_CARD_OPT);
-		clk_ctrl = sd_ctrl_read16(host, CTL_SD_CARD_CLK_CTL);
-		if (host->pdata->flags & TMIO_MMC_MIN_RCAR2)
-			sdif_mode = sd_ctrl_read16(host, CTL_SDIF_MODE);
-	}
-
 	/* FIXME - should we set stop clock reg here */
 	sd_ctrl_write16(host, CTL_RESET_SD, 0x0000);
 	usleep_range(10000, 11000);
@@ -199,7 +190,7 @@ static void tmio_mmc_reset(struct tmio_mmc_host *host, bool preserve)
 	tmio_mmc_abort_dma(host);
 
 	if (host->reset)
-		host->reset(host, preserve);
+		host->reset(host);
 
 	sd_ctrl_write32_as_16_and_16(host, CTL_IRQ_MASK, host->sdcard_irq_mask_all);
 	host->sdcard_irq_mask = host->sdcard_irq_mask_all;
@@ -213,13 +204,6 @@ static void tmio_mmc_reset(struct tmio_mmc_host *host, bool preserve)
 	if (host->pdata->flags & TMIO_MMC_SDIO_IRQ) {
 		sd_ctrl_write16(host, CTL_SDIO_IRQ_MASK, host->sdio_irq_mask);
 		sd_ctrl_write16(host, CTL_TRANSACTION_CTL, 0x0001);
-	}
-
-	if (preserve) {
-		sd_ctrl_write16(host, CTL_SD_MEM_CARD_OPT, card_opt);
-		sd_ctrl_write16(host, CTL_SD_CARD_CLK_CTL, clk_ctrl);
-		if (host->pdata->flags & TMIO_MMC_MIN_RCAR2)
-			sd_ctrl_write16(host, CTL_SDIF_MODE, sdif_mode);
 	}
 
 	if (host->mmc->card)
@@ -264,7 +248,7 @@ static void tmio_mmc_reset_work(struct work_struct *work)
 
 	spin_unlock_irqrestore(&host->lock, flags);
 
-	tmio_mmc_reset(host, true);
+	tmio_mmc_reset(host);
 
 	/* Ready for new calls */
 	host->mrq = NULL;
@@ -977,7 +961,7 @@ static void tmio_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		tmio_mmc_power_off(host);
 		/* For R-Car Gen2+, we need to reset SDHI specific SCC */
 		if (host->pdata->flags & TMIO_MMC_MIN_RCAR2)
-			tmio_mmc_reset(host, false);
+			tmio_mmc_reset(host);
 
 		host->set_clock(host, 0);
 		break;
@@ -1205,7 +1189,7 @@ int tmio_mmc_host_probe(struct tmio_mmc_host *_host)
 		_host->sdcard_irq_mask_all = TMIO_MASK_ALL;
 
 	_host->set_clock(_host, 0);
-	tmio_mmc_reset(_host, false);
+	tmio_mmc_reset(_host);
 
 	spin_lock_init(&_host->lock);
 	mutex_init(&_host->ios_lock);
@@ -1301,7 +1285,7 @@ int tmio_mmc_host_runtime_resume(struct device *dev)
 	struct tmio_mmc_host *host = dev_get_drvdata(dev);
 
 	tmio_mmc_clk_enable(host);
-	tmio_mmc_reset(host, false);
+	tmio_mmc_reset(host);
 
 	if (host->clk_cache)
 		host->set_clock(host, host->clk_cache);

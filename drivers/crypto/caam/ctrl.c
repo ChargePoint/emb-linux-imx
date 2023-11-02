@@ -86,7 +86,6 @@ static const struct of_device_id imx8m_machine_match[] = {
 	{ .compatible = "fsl,imx8mn", },
 	{ .compatible = "fsl,imx8mp", },
 	{ .compatible = "fsl,imx8mq", },
-	{ .compatible = "fsl,imx8ulp", },
 	{ }
 };
 

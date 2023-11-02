@@ -18,7 +18,7 @@
 };
 
 &sdc2_state_on {
-	clk {
+	pinconf-clk {
 		drive-strength = <14>;
 	};
 };

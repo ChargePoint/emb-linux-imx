@@ -57,8 +57,8 @@ __init bool sysfb_parse_mode(const struct screen_info *si,
 	return false;
 }
 
-__init struct platform_device *sysfb_create_simplefb(const struct screen_info *si,
-						     const struct simplefb_platform_data *mode)
+__init int sysfb_create_simplefb(const struct screen_info *si,
+				 const struct simplefb_platform_data *mode)
 {
 	struct platform_device *pd;
 	struct resource res;
@@ -76,7 +76,7 @@ __init struct platform_device *sysfb_create_simplefb(const struct screen_info *s
 		base |= (u64)si->ext_lfb_base << 32;
 	if (!base || (u64)(resource_size_t)base != base) {
 		printk(KERN_DEBUG "sysfb: inaccessible VRAM base\n");
-		return ERR_PTR(-EINVAL);
+		return -EINVAL;
 	}
 
 	/*
@@ -93,7 +93,7 @@ __init struct platform_device *sysfb_create_simplefb(const struct screen_info *s
 	length = mode->height * mode->stride;
 	if (length > size) {
 		printk(KERN_WARNING "sysfb: VRAM smaller than advertised\n");
-		return ERR_PTR(-EINVAL);
+		return -EINVAL;
 	}
 	length = PAGE_ALIGN(length);
 
@@ -104,30 +104,25 @@ __init struct platform_device *sysfb_create_simplefb(const struct screen_info *s
 	res.start = base;
 	res.end = res.start + length - 1;
 	if (res.end <= res.start)
-		return ERR_PTR(-EINVAL);
+		return -EINVAL;
 
 	pd = platform_device_alloc("simple-framebuffer", 0);
 	if (!pd)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
 	sysfb_apply_efi_quirks(pd);
 
 	ret = platform_device_add_resources(pd, &res, 1);
-	if (ret)
-		goto err_put_device;
+	if (ret) {
+		platform_device_put(pd);
+		return ret;
+	}
 
 	ret = platform_device_add_data(pd, mode, sizeof(*mode));
-	if (ret)
-		goto err_put_device;
+	if (ret) {
+		platform_device_put(pd);
+		return ret;
+	}
 
-	ret = platform_device_add(pd);
-	if (ret)
-		goto err_put_device;
-
-	return pd;
-
-err_put_device:
-	platform_device_put(pd);
-
-	return ERR_PTR(ret);
+	return platform_device_add(pd);
 }

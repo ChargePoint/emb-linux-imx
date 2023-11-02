@@ -1015,7 +1015,7 @@ void cdns_hdcp_show_pairing(struct cdns_mhdp_device *mhdp, struct hdcp_trans_pai
 }
 #endif
 
-static int cdns_hdcp_dump_pairing(struct seq_file *s, void *data)
+void cdns_hdcp_dump_pairing(struct seq_file *s, void *data)
 {
 	struct cdns_mhdp_device *mhdp = data;
 #ifdef DEBUG
@@ -1023,13 +1023,14 @@ static int cdns_hdcp_dump_pairing(struct seq_file *s, void *data)
 	for (i = 0; i < mhdp->hdcp.num_paired; i++)
 		cdns_hdcp_show_pairing(mhdp, &mhdp->hdcp.pairing[i]);
 #endif
-	return seq_write(s, &mhdp->hdcp.pairing[0],
+	seq_write(s, &mhdp->hdcp.pairing[0],
 		  mhdp->hdcp.num_paired * sizeof(struct hdcp_trans_pairing_data));
 }
 
 static int cdns_hdcp_pairing_show(struct seq_file *s, void *data)
 {
-	return cdns_hdcp_dump_pairing(s, s->private);
+	cdns_hdcp_dump_pairing(s, s->private);
+	return 0;
 }
 
 static int cdns_hdcp_dump_pairing_open(struct inode *inode, struct file *file)

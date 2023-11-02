@@ -2125,32 +2125,6 @@ out_scratch:
 }
 
 /**
- * nft_set_pipapo_match_destroy() - Destroy elements from key mapping array
- * @set:	nftables API set representation
- * @m:		matching data pointing to key mapping array
- */
-static void nft_set_pipapo_match_destroy(const struct nft_set *set,
-					 struct nft_pipapo_match *m)
-{
-	struct nft_pipapo_field *f;
-	int i, r;
-
-	for (i = 0, f = m->f; i < m->field_count - 1; i++, f++)
-		;
-
-	for (r = 0; r < f->rules; r++) {
-		struct nft_pipapo_elem *e;
-
-		if (r < f->rules - 1 && f->mt[r + 1].e == f->mt[r].e)
-			continue;
-
-		e = f->mt[r].e;
-
-		nft_set_elem_destroy(set, e, true);
-	}
-}
-
-/**
  * nft_pipapo_destroy() - Free private data for set and all committed elements
  * @set:	nftables API set representation
  */
@@ -2158,13 +2132,26 @@ static void nft_pipapo_destroy(const struct nft_set *set)
 {
 	struct nft_pipapo *priv = nft_set_priv(set);
 	struct nft_pipapo_match *m;
-	int cpu;
+	struct nft_pipapo_field *f;
+	int i, r, cpu;
 
 	m = rcu_dereference_protected(priv->match, true);
 	if (m) {
 		rcu_barrier();
 
-		nft_set_pipapo_match_destroy(set, m);
+		for (i = 0, f = m->f; i < m->field_count - 1; i++, f++)
+			;
+
+		for (r = 0; r < f->rules; r++) {
+			struct nft_pipapo_elem *e;
+
+			if (r < f->rules - 1 && f->mt[r + 1].e == f->mt[r].e)
+				continue;
+
+			e = f->mt[r].e;
+
+			nft_set_elem_destroy(set, e, true);
+		}
 
 #ifdef NFT_PIPAPO_ALIGN
 		free_percpu(m->scratch_aligned);
@@ -2178,11 +2165,6 @@ static void nft_pipapo_destroy(const struct nft_set *set)
 	}
 
 	if (priv->clone) {
-		m = priv->clone;
-
-		if (priv->dirty)
-			nft_set_pipapo_match_destroy(set, m);
-
 #ifdef NFT_PIPAPO_ALIGN
 		free_percpu(priv->clone->scratch_aligned);
 #endif

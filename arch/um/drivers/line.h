@@ -23,7 +23,9 @@ struct line_driver {
 	const short minor_start;
 	const short type;
 	const short subtype;
+	const int read_irq;
 	const char *read_irq_name;
+	const int write_irq;
 	const char *write_irq_name;
 	struct mc_device mc;
 	struct tty_driver *driver;
@@ -32,8 +34,6 @@ struct line_driver {
 struct line {
 	struct tty_port port;
 	int valid;
-
-	int read_irq, write_irq;
 
 	char *init_str;
 	struct list_head chan_list;

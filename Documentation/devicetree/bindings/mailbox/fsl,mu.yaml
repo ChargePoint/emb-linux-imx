@@ -29,11 +29,6 @@ properties:
       - const: fsl,imx8ulp-mu
       - const: fsl,imx8-mu-scu
       - const: fsl,imx8-mu-seco
-      - const: fsl,imx93-mu-s4
-      - const: fsl,imx8ulp-mu-s4
-      - items:
-          - const: fsl,imx93-mu
-          - const: fsl,imx8ulp-mu
       - items:
           - enum:
               - fsl,imx7s-mu
@@ -58,14 +53,7 @@ properties:
     maxItems: 1
 
   interrupts:
-    minItems: 1
-    maxItems: 2
-
-  interrupt-names:
-    minItems: 1
-    items:
-      - const: tx
-      - const: rx
+    maxItems: 1
 
   "#mbox-cells":
     description: |
@@ -99,27 +87,6 @@ required:
   - reg
   - interrupts
   - "#mbox-cells"
-
-allOf:
-  - if:
-      properties:
-        compatible:
-          enum:
-            - fsl,imx93-mu-s4
-    then:
-      properties:
-        interrupt-names:
-          minItems: 2
-        interrupts:
-          minItems: 2
-
-    else:
-      properties:
-        interrupts:
-          maxItems: 1
-      not:
-        required:
-          - interrupt-names
 
 additionalProperties: false
 

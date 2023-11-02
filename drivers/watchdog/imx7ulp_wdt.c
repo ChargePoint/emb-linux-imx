@@ -9,7 +9,6 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/reboot.h>
 #include <linux/watchdog.h>
@@ -53,17 +52,11 @@ module_param(nowayout, bool, 0000);
 MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default="
 		 __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
-struct imx_wdt_hw_feature {
-	bool prescaler_enable;
-	u32 wdog_clock_rate;
-};
-
 struct imx7ulp_wdt_device {
 	struct watchdog_device wdd;
 	void __iomem *base;
 	struct clk *clk;
 	bool post_rcs_wait;
-	const struct imx_wdt_hw_feature *hw;
 };
 
 static int imx7ulp_wdt_wait_ulk(void __iomem *base)
@@ -142,6 +135,13 @@ static int imx7ulp_wdt_enable(struct watchdog_device *wdog, bool enable)
 	return ret;
 }
 
+static bool imx7ulp_wdt_is_enabled(void __iomem *base)
+{
+	u32 val = readl(base + WDOG_CS);
+
+	return val & WDOG_CS_EN;
+}
+
 static int imx7ulp_wdt_ping(struct watchdog_device *wdog)
 {
 	struct imx7ulp_wdt_device *wdt = watchdog_get_drvdata(wdog);
@@ -185,7 +185,7 @@ static int imx7ulp_wdt_set_timeout(struct watchdog_device *wdog,
 				   unsigned int timeout)
 {
 	struct imx7ulp_wdt_device *wdt = watchdog_get_drvdata(wdog);
-	u32 toval = wdt->hw->wdog_clock_rate * timeout;
+	u32 toval = WDOG_CLOCK_RATE * timeout;
 	u32 val;
 	int ret;
 	u32 loop = RETRY_MAX;
@@ -282,9 +282,6 @@ static int imx7ulp_wdt_init(struct imx7ulp_wdt_device *wdt, unsigned int timeout
 	int ret;
 	u32 loop = RETRY_MAX;
 
-	if (wdt->hw->prescaler_enable)
-		val |= WDOG_CS_PRES;
-
 	do {
 		ret = _imx7ulp_wdt_init(wdt, timeout, val);
 		toval = readl(wdt->base + WDOG_TOVAL);
@@ -331,10 +328,6 @@ static int imx7ulp_wdt_probe(struct platform_device *pdev)
 				    "fsl,imx8ulp-wdt")) {
 		dev_info(dev, "imx8ulp wdt probe\n");
 		imx7ulp_wdt->post_rcs_wait = false;
-	} else if (of_device_is_compatible(dev->of_node,
-				    "fsl,imx93-wdt")) {
-		dev_info(dev, "imx93 wdt probe\n");
-		imx7ulp_wdt->post_rcs_wait = false;
 	} else {
 		dev_info(dev, "imx7ulp wdt probe\n");
 	}
@@ -359,9 +352,7 @@ static int imx7ulp_wdt_probe(struct platform_device *pdev)
 	watchdog_stop_on_reboot(wdog);
 	watchdog_stop_on_unregister(wdog);
 	watchdog_set_drvdata(wdog, imx7ulp_wdt);
-
-	imx7ulp_wdt->hw = of_device_get_match_data(dev);
-	ret = imx7ulp_wdt_init(imx7ulp_wdt, wdog->timeout * imx7ulp_wdt->hw->wdog_clock_rate);
+	ret = imx7ulp_wdt_init(imx7ulp_wdt, wdog->timeout * WDOG_CLOCK_RATE);
 	if (ret)
 		return ret;
 
@@ -383,18 +374,18 @@ static int __maybe_unused imx7ulp_wdt_suspend_noirq(struct device *dev)
 static int __maybe_unused imx7ulp_wdt_resume_noirq(struct device *dev)
 {
 	struct imx7ulp_wdt_device *imx7ulp_wdt = dev_get_drvdata(dev);
-	u32 timeout = imx7ulp_wdt->wdd.timeout * imx7ulp_wdt->hw->wdog_clock_rate;
+	u32 timeout = imx7ulp_wdt->wdd.timeout * WDOG_CLOCK_RATE;
 	int ret;
 
 	ret = clk_prepare_enable(imx7ulp_wdt->clk);
 	if (ret)
 		return ret;
 
-	if (watchdog_active(&imx7ulp_wdt->wdd)) {
+	if (imx7ulp_wdt_is_enabled(imx7ulp_wdt->base))
 		imx7ulp_wdt_init(imx7ulp_wdt, timeout);
+
+	if (watchdog_active(&imx7ulp_wdt->wdd))
 		imx7ulp_wdt_start(&imx7ulp_wdt->wdd);
-		imx7ulp_wdt_ping(&imx7ulp_wdt->wdd);
-	}
 
 	return 0;
 }
@@ -404,20 +395,9 @@ static const struct dev_pm_ops imx7ulp_wdt_pm_ops = {
 				      imx7ulp_wdt_resume_noirq)
 };
 
-static const struct imx_wdt_hw_feature imx7ulp_wdt_hw = {
-	.prescaler_enable = false,
-	.wdog_clock_rate = 1000,
-};
-
-static const struct imx_wdt_hw_feature imx93_wdt_hw = {
-	.prescaler_enable = true,
-	.wdog_clock_rate = 125,
-};
-
 static const struct of_device_id imx7ulp_wdt_dt_ids[] = {
-	{ .compatible = "fsl,imx8ulp-wdt", .data = &imx7ulp_wdt_hw, },
-	{ .compatible = "fsl,imx7ulp-wdt", .data = &imx7ulp_wdt_hw, },
-	{ .compatible = "fsl,imx93-wdt", .data = &imx93_wdt_hw, },
+	{ .compatible = "fsl,imx8ulp-wdt", },
+	{ .compatible = "fsl,imx7ulp-wdt", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx7ulp_wdt_dt_ids);

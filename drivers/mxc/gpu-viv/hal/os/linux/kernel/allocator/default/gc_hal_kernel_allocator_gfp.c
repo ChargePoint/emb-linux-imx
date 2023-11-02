@@ -302,12 +302,7 @@ _NonContiguous1MPagesFree(
             else
 #endif
             {
-                int order = get_order(gcd1M_PAGE_SIZE);
-
-                if (order < MAX_ORDER)
-                {
-                    __free_pages(MdlPriv->Pages1M[i], order);
-                }
+                __free_pages(MdlPriv->Pages1M[i], get_order(gcd1M_PAGE_SIZE));
             }
         }
     }
@@ -530,7 +525,6 @@ _GFPAlloc(
         /* remove __GFP_HIGHMEM bit, add __GFP_DMA32 bit */
         gfp &= ~__GFP_HIGHMEM;
         gfp |= __GFP_DMA32;
-        normal_gfp |= __GFP_DMA32;
     }
 #else
     if (Flags & gcvALLOC_FLAG_4GB_ADDR || (Allocator->os->device->platform->flagBits & gcvPLATFORM_FLAG_LIMIT_4G_ADDRESS))
@@ -554,18 +548,10 @@ _GFPAlloc(
     if (contiguous)
     {
         size_t bytes = NumPages << PAGE_SHIFT;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
         void *addr = NULL;
 
-#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-        gfp &= ~__GFP_HIGHMEM;
-        gfp |= __GFP_DMA32;
-#else
-        gfp &= ~__GFP_HIGHMEM;
-        gfp |= __GFP_DMA;
-#endif
-
-Alloc:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
         addr = alloc_pages_exact(bytes, (gfp & ~__GFP_HIGHMEM) | __GFP_NORETRY);
 
         mdlPriv->contiguousPages = addr ? virt_to_page(addr) : gcvNULL;
@@ -591,25 +577,7 @@ Alloc:
 
         if (mdlPriv->contiguousPages == gcvNULL)
         {
-            if (Flags & gcvALLOC_FLAG_4GB_ADDR || (Allocator->os->device->platform->flagBits & gcvPLATFORM_FLAG_LIMIT_4G_ADDRESS))
-            {
-                gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
-            }
-            else if (gfp & __GFP_HIGHMEM)
-            {
-                gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
-            }
-            else
-            {
-#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-                gfp &= ~__GFP_DMA32;
-                gfp |= __GFP_HIGHMEM;
-#else
-                gfp &= ~__GFP_DMA;
-                gfp |= __GFP_HIGHMEM;
-#endif
-                goto Alloc;
-            }
+            gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
         }
 
         mdlPriv->dma_addr = dma_map_page(galcore_device,
@@ -626,12 +594,7 @@ Alloc:
             else
 #endif
             {
-                int order = get_order(bytes);
-
-                if (order < MAX_ORDER)
-                {
-                    __free_pages(mdlPriv->contiguousPages, order);
-                }
+                __free_pages(mdlPriv->contiguousPages, get_order(bytes));
             }
 
             gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
@@ -662,9 +625,6 @@ Alloc:
                 gcmkONERROR(_NonContiguousAlloc(mdlPriv, NumPages, gfp));
             }
         }
-#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-        normal_gfp &= ~__GFP_DMA32;
-#endif
 #if gcdUSE_Linux_SG_TABLE_API
         result = sg_alloc_table_from_pages(&mdlPriv->sgt,
                     mdlPriv->nonContiguousPages, NumPages, 0,
@@ -916,12 +876,7 @@ _GFPFree(
         else
 #endif
         {
-            int order = get_order(Mdl->numPages * PAGE_SIZE);
-
-            if (order < MAX_ORDER)
-            {
-                __free_pages(mdlPriv->contiguousPages, order);
-            }
+            __free_pages(mdlPriv->contiguousPages, get_order(Mdl->numPages * PAGE_SIZE));
         }
     }
     else

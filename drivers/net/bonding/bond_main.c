@@ -862,8 +862,12 @@ static void bond_hw_addr_flush(struct net_device *bond_dev,
 	dev_uc_unsync(slave_dev, bond_dev);
 	dev_mc_unsync(slave_dev, bond_dev);
 
-	if (BOND_MODE(bond) == BOND_MODE_8023AD)
-		dev_mc_del(slave_dev, lacpdu_mcast_addr);
+	if (BOND_MODE(bond) == BOND_MODE_8023AD) {
+		/* del lacpdu mc addr from mc list */
+		u8 lacpdu_multicast[ETH_ALEN] = MULTICAST_LACPDU_ADDR;
+
+		dev_mc_del(slave_dev, lacpdu_multicast);
+	}
 }
 
 /*--------------------------- Active slave change ---------------------------*/
@@ -883,8 +887,7 @@ static void bond_hw_addr_swap(struct bonding *bond, struct slave *new_active,
 		if (bond->dev->flags & IFF_ALLMULTI)
 			dev_set_allmulti(old_active->dev, -1);
 
-		if (bond->dev->flags & IFF_UP)
-			bond_hw_addr_flush(bond->dev, old_active->dev);
+		bond_hw_addr_flush(bond->dev, old_active->dev);
 	}
 
 	if (new_active) {
@@ -895,12 +898,10 @@ static void bond_hw_addr_swap(struct bonding *bond, struct slave *new_active,
 		if (bond->dev->flags & IFF_ALLMULTI)
 			dev_set_allmulti(new_active->dev, 1);
 
-		if (bond->dev->flags & IFF_UP) {
-			netif_addr_lock_bh(bond->dev);
-			dev_uc_sync(new_active->dev, bond->dev);
-			dev_mc_sync(new_active->dev, bond->dev);
-			netif_addr_unlock_bh(bond->dev);
-		}
+		netif_addr_lock_bh(bond->dev);
+		dev_uc_sync(new_active->dev, bond->dev);
+		dev_mc_sync(new_active->dev, bond->dev);
+		netif_addr_unlock_bh(bond->dev);
 	}
 }
 
@@ -2133,14 +2134,16 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev,
 			}
 		}
 
-		if (bond_dev->flags & IFF_UP) {
-			netif_addr_lock_bh(bond_dev);
-			dev_mc_sync_multiple(slave_dev, bond_dev);
-			dev_uc_sync_multiple(slave_dev, bond_dev);
-			netif_addr_unlock_bh(bond_dev);
+		netif_addr_lock_bh(bond_dev);
+		dev_mc_sync_multiple(slave_dev, bond_dev);
+		dev_uc_sync_multiple(slave_dev, bond_dev);
+		netif_addr_unlock_bh(bond_dev);
 
-			if (BOND_MODE(bond) == BOND_MODE_8023AD)
-				dev_mc_add(slave_dev, lacpdu_mcast_addr);
+		if (BOND_MODE(bond) == BOND_MODE_8023AD) {
+			/* add lacpdu mc addr to mc list */
+			u8 lacpdu_multicast[ETH_ALEN] = MULTICAST_LACPDU_ADDR;
+
+			dev_mc_add(slave_dev, lacpdu_multicast);
 		}
 	}
 
@@ -2412,8 +2415,7 @@ static int __bond_release_one(struct net_device *bond_dev,
 		if (old_flags & IFF_ALLMULTI)
 			dev_set_allmulti(slave_dev, -1);
 
-		if (old_flags & IFF_UP)
-			bond_hw_addr_flush(bond_dev, slave_dev);
+		bond_hw_addr_flush(bond_dev, slave_dev);
 	}
 
 	slave_disable_netpoll(slave);
@@ -3472,11 +3474,9 @@ re_arm:
 		if (!rtnl_trylock())
 			return;
 
-		if (should_notify_peers) {
-			bond->send_peer_notif--;
+		if (should_notify_peers)
 			call_netdevice_notifiers(NETDEV_NOTIFY_PEERS,
 						 bond->dev);
-		}
 		if (should_notify_rtnl) {
 			bond_slave_state_notify(bond);
 			bond_slave_link_notify(bond);
@@ -3817,19 +3817,14 @@ static bool bond_flow_dissect(struct bonding *bond, struct sk_buff *skb, const v
 	return true;
 }
 
-static u32 bond_ip_hash(u32 hash, struct flow_keys *flow, int xmit_policy)
+static u32 bond_ip_hash(u32 hash, struct flow_keys *flow)
 {
 	hash ^= (__force u32)flow_get_u32_dst(flow) ^
 		(__force u32)flow_get_u32_src(flow);
 	hash ^= (hash >> 16);
 	hash ^= (hash >> 8);
-
 	/* discard lowest hash bit to deal with the common even ports pattern */
-	if (xmit_policy == BOND_XMIT_POLICY_LAYER34 ||
-		xmit_policy == BOND_XMIT_POLICY_ENCAP34)
-		return hash >> 1;
-
-	return hash;
+	return hash >> 1;
 }
 
 /* Generate hash based on xmit policy. If @skb is given it is used to linearize
@@ -3859,7 +3854,7 @@ static u32 __bond_xmit_hash(struct bonding *bond, struct sk_buff *skb, const voi
 			memcpy(&hash, &flow.ports.ports, sizeof(hash));
 	}
 
-	return bond_ip_hash(hash, &flow, bond->params.xmit_policy);
+	return bond_ip_hash(hash, &flow);
 }
 
 /**
@@ -3930,12 +3925,6 @@ static int bond_open(struct net_device *bond_dev)
 	struct list_head *iter;
 	struct slave *slave;
 
-	if (BOND_MODE(bond) == BOND_MODE_ROUNDROBIN && !bond->rr_tx_counter) {
-		bond->rr_tx_counter = alloc_percpu(u32);
-		if (!bond->rr_tx_counter)
-			return -ENOMEM;
-	}
-
 	/* reset slave->backup and slave->inactive */
 	if (bond_has_slaves(bond)) {
 		bond_for_each_slave(bond, slave, iter) {
@@ -3973,9 +3962,6 @@ static int bond_open(struct net_device *bond_dev)
 		/* register to receive LACPDUs */
 		bond->recv_probe = bond_3ad_lacpdu_recv;
 		bond_3ad_initiate_agg_selection(bond, 1);
-
-		bond_for_each_slave(bond, slave, iter)
-			dev_mc_add(slave->dev, lacpdu_mcast_addr);
 	}
 
 	if (bond_mode_can_use_xmit_hash(bond))
@@ -3987,26 +3973,12 @@ static int bond_open(struct net_device *bond_dev)
 static int bond_close(struct net_device *bond_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
-	struct slave *slave;
 
 	bond_work_cancel_all(bond);
 	bond->send_peer_notif = 0;
 	if (bond_is_lb(bond))
 		bond_alb_deinitialize(bond);
 	bond->recv_probe = NULL;
-
-	if (bond_uses_primary(bond)) {
-		rcu_read_lock();
-		slave = rcu_dereference(bond->curr_active_slave);
-		if (slave)
-			bond_hw_addr_flush(bond_dev, slave->dev);
-		rcu_read_unlock();
-	} else {
-		struct list_head *iter;
-
-		bond_for_each_slave(bond, slave, iter)
-			bond_hw_addr_flush(bond_dev, slave->dev);
-	}
 
 	return 0;
 }
@@ -5040,7 +5012,7 @@ static u32 bond_sk_hash_l34(struct sock *sk)
 	/* L4 */
 	memcpy(&hash, &flow.ports.ports, sizeof(hash));
 	/* L3 */
-	return bond_ip_hash(hash, &flow, BOND_XMIT_POLICY_LAYER34);
+	return bond_ip_hash(hash, &flow);
 }
 
 static struct net_device *__bond_sk_get_lower_dev(struct bonding *bond,
@@ -5912,6 +5884,15 @@ static int bond_init(struct net_device *bond_dev)
 	bond->wq = alloc_ordered_workqueue(bond_dev->name, WQ_MEM_RECLAIM);
 	if (!bond->wq)
 		return -ENOMEM;
+
+	if (BOND_MODE(bond) == BOND_MODE_ROUNDROBIN) {
+		bond->rr_tx_counter = alloc_percpu(u32);
+		if (!bond->rr_tx_counter) {
+			destroy_workqueue(bond->wq);
+			bond->wq = NULL;
+			return -ENOMEM;
+		}
+	}
 
 	spin_lock_init(&bond->stats_lock);
 	netdev_lockdep_set_classes(bond_dev);

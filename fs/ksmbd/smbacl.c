@@ -9,7 +9,6 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/mnt_idmapping.h>
 
 #include "smbacl.h"
 #include "smb_common.h"
@@ -275,7 +274,14 @@ static int sid_to_id(struct user_namespace *user_ns,
 		uid_t id;
 
 		id = le32_to_cpu(psid->sub_auth[psid->num_subauth - 1]);
-		uid = mapped_kuid_user(user_ns, &init_user_ns, KUIDT_INIT(id));
+		/*
+		 * Translate raw sid into kuid in the server's user
+		 * namespace.
+		 */
+		uid = make_kuid(&init_user_ns, id);
+
+		/* If this is an idmapped mount, apply the idmapping. */
+		uid = kuid_from_mnt(user_ns, uid);
 		if (uid_valid(uid)) {
 			fattr->cf_uid = uid;
 			rc = 0;
@@ -285,7 +291,14 @@ static int sid_to_id(struct user_namespace *user_ns,
 		gid_t id;
 
 		id = le32_to_cpu(psid->sub_auth[psid->num_subauth - 1]);
-		gid = mapped_kgid_user(user_ns, &init_user_ns, KGIDT_INIT(id));
+		/*
+		 * Translate raw sid into kgid in the server's user
+		 * namespace.
+		 */
+		gid = make_kgid(&init_user_ns, id);
+
+		/* If this is an idmapped mount, apply the idmapping. */
+		gid = kgid_from_mnt(user_ns, gid);
 		if (gid_valid(gid)) {
 			fattr->cf_gid = gid;
 			rc = 0;
@@ -690,7 +703,6 @@ posix_default_acl:
 static void set_ntacl_dacl(struct user_namespace *user_ns,
 			   struct smb_acl *pndacl,
 			   struct smb_acl *nt_dacl,
-			   unsigned int aces_size,
 			   const struct smb_sid *pownersid,
 			   const struct smb_sid *pgrpsid,
 			   struct smb_fattr *fattr)
@@ -704,19 +716,9 @@ static void set_ntacl_dacl(struct user_namespace *user_ns,
 	if (nt_num_aces) {
 		ntace = (struct smb_ace *)((char *)nt_dacl + sizeof(struct smb_acl));
 		for (i = 0; i < nt_num_aces; i++) {
-			unsigned short nt_ace_size;
-
-			if (offsetof(struct smb_ace, access_req) > aces_size)
-				break;
-
-			nt_ace_size = le16_to_cpu(ntace->size);
-			if (nt_ace_size > aces_size)
-				break;
-
-			memcpy((char *)pndace + size, ntace, nt_ace_size);
-			size += nt_ace_size;
-			aces_size -= nt_ace_size;
-			ntace = (struct smb_ace *)((char *)ntace + nt_ace_size);
+			memcpy((char *)pndace + size, ntace, le16_to_cpu(ntace->size));
+			size += le16_to_cpu(ntace->size);
+			ntace = (struct smb_ace *)((char *)ntace + le16_to_cpu(ntace->size));
 			num_aces++;
 		}
 	}
@@ -889,7 +891,7 @@ int parse_sec_desc(struct user_namespace *user_ns, struct smb_ntsd *pntsd,
 /* Convert permission bits from mode to equivalent CIFS ACL */
 int build_sec_desc(struct user_namespace *user_ns,
 		   struct smb_ntsd *pntsd, struct smb_ntsd *ppntsd,
-		   int ppntsd_size, int addition_info, __u32 *secdesclen,
+		   int addition_info, __u32 *secdesclen,
 		   struct smb_fattr *fattr)
 {
 	int rc = 0;
@@ -949,25 +951,15 @@ int build_sec_desc(struct user_namespace *user_ns,
 
 		if (!ppntsd) {
 			set_mode_dacl(user_ns, dacl_ptr, fattr);
+		} else if (!ppntsd->dacloffset) {
+			goto out;
 		} else {
 			struct smb_acl *ppdacl_ptr;
-			unsigned int dacl_offset = le32_to_cpu(ppntsd->dacloffset);
-			int ppdacl_size, ntacl_size = ppntsd_size - dacl_offset;
 
-			if (!dacl_offset ||
-			    (dacl_offset + sizeof(struct smb_acl) > ppntsd_size))
-				goto out;
-
-			ppdacl_ptr = (struct smb_acl *)((char *)ppntsd + dacl_offset);
-			ppdacl_size = le16_to_cpu(ppdacl_ptr->size);
-			if (ppdacl_size > ntacl_size ||
-			    ppdacl_size < sizeof(struct smb_acl))
-				goto out;
-
+			ppdacl_ptr = (struct smb_acl *)((char *)ppntsd +
+						le32_to_cpu(ppntsd->dacloffset));
 			set_ntacl_dacl(user_ns, dacl_ptr, ppdacl_ptr,
-				       ntacl_size - sizeof(struct smb_acl),
-				       nowner_sid_ptr, ngroup_sid_ptr,
-				       fattr);
+				       nowner_sid_ptr, ngroup_sid_ptr, fattr);
 		}
 		pntsd->dacloffset = cpu_to_le32(offset);
 		offset += le16_to_cpu(dacl_ptr->size);
@@ -1001,31 +993,24 @@ int smb_inherit_dacl(struct ksmbd_conn *conn,
 	struct smb_sid owner_sid, group_sid;
 	struct dentry *parent = path->dentry->d_parent;
 	struct user_namespace *user_ns = mnt_user_ns(path->mnt);
-	int inherited_flags = 0, flags = 0, i, ace_cnt = 0, nt_size = 0, pdacl_size;
-	int rc = 0, num_aces, dacloffset, pntsd_type, pntsd_size, acl_len, aces_size;
+	int inherited_flags = 0, flags = 0, i, ace_cnt = 0, nt_size = 0;
+	int rc = 0, num_aces, dacloffset, pntsd_type, acl_len;
 	char *aces_base;
 	bool is_dir = S_ISDIR(d_inode(path->dentry)->i_mode);
 
-	pntsd_size = ksmbd_vfs_get_sd_xattr(conn, user_ns,
-					    parent, &parent_pntsd);
-	if (pntsd_size <= 0)
+	acl_len = ksmbd_vfs_get_sd_xattr(conn, user_ns,
+					 parent, &parent_pntsd);
+	if (acl_len <= 0)
 		return -ENOENT;
 	dacloffset = le32_to_cpu(parent_pntsd->dacloffset);
-	if (!dacloffset || (dacloffset + sizeof(struct smb_acl) > pntsd_size)) {
+	if (!dacloffset) {
 		rc = -EINVAL;
 		goto free_parent_pntsd;
 	}
 
 	parent_pdacl = (struct smb_acl *)((char *)parent_pntsd + dacloffset);
-	acl_len = pntsd_size - dacloffset;
 	num_aces = le32_to_cpu(parent_pdacl->num_aces);
 	pntsd_type = le16_to_cpu(parent_pntsd->type);
-	pdacl_size = le16_to_cpu(parent_pdacl->size);
-
-	if (pdacl_size > acl_len || pdacl_size < sizeof(struct smb_acl)) {
-		rc = -EINVAL;
-		goto free_parent_pntsd;
-	}
 
 	aces_base = kmalloc(sizeof(struct smb_ace) * num_aces * 2, GFP_KERNEL);
 	if (!aces_base) {
@@ -1036,23 +1021,11 @@ int smb_inherit_dacl(struct ksmbd_conn *conn,
 	aces = (struct smb_ace *)aces_base;
 	parent_aces = (struct smb_ace *)((char *)parent_pdacl +
 			sizeof(struct smb_acl));
-	aces_size = acl_len - sizeof(struct smb_acl);
 
 	if (pntsd_type & DACL_AUTO_INHERITED)
 		inherited_flags = INHERITED_ACE;
 
 	for (i = 0; i < num_aces; i++) {
-		int pace_size;
-
-		if (offsetof(struct smb_ace, access_req) > aces_size)
-			break;
-
-		pace_size = le16_to_cpu(parent_aces->size);
-		if (pace_size > aces_size)
-			break;
-
-		aces_size -= pace_size;
-
 		flags = parent_aces->flags;
 		if (!smb_inherit_flags(flags, is_dir))
 			goto pass;
@@ -1097,7 +1070,8 @@ int smb_inherit_dacl(struct ksmbd_conn *conn,
 		aces = (struct smb_ace *)((char *)aces + le16_to_cpu(aces->size));
 		ace_cnt++;
 pass:
-		parent_aces = (struct smb_ace *)((char *)parent_aces + pace_size);
+		parent_aces =
+			(struct smb_ace *)((char *)parent_aces + le16_to_cpu(parent_aces->size));
 	}
 
 	if (nt_size > 0) {
@@ -1192,7 +1166,7 @@ int smb_check_perm_dacl(struct ksmbd_conn *conn, struct path *path,
 	struct smb_ntsd *pntsd = NULL;
 	struct smb_acl *pdacl;
 	struct posix_acl *posix_acls;
-	int rc = 0, pntsd_size, acl_size, aces_size, pdacl_size, dacl_offset;
+	int rc = 0, acl_size;
 	struct smb_sid sid;
 	int granted = le32_to_cpu(*pdaccess & ~FILE_MAXIMAL_ACCESS_LE);
 	struct smb_ace *ace;
@@ -1201,33 +1175,37 @@ int smb_check_perm_dacl(struct ksmbd_conn *conn, struct path *path,
 	struct smb_ace *others_ace = NULL;
 	struct posix_acl_entry *pa_entry;
 	unsigned int sid_type = SIDOWNER;
-	unsigned short ace_size;
+	char *end_of_acl;
 
 	ksmbd_debug(SMB, "check permission using windows acl\n");
-	pntsd_size = ksmbd_vfs_get_sd_xattr(conn, user_ns,
-					    path->dentry, &pntsd);
-	if (pntsd_size <= 0 || !pntsd)
-		goto err_out;
-
-	dacl_offset = le32_to_cpu(pntsd->dacloffset);
-	if (!dacl_offset ||
-	    (dacl_offset + sizeof(struct smb_acl) > pntsd_size))
-		goto err_out;
+	acl_size = ksmbd_vfs_get_sd_xattr(conn, user_ns,
+					  path->dentry, &pntsd);
+	if (acl_size <= 0 || !pntsd || !pntsd->dacloffset) {
+		kfree(pntsd);
+		return 0;
+	}
 
 	pdacl = (struct smb_acl *)((char *)pntsd + le32_to_cpu(pntsd->dacloffset));
-	acl_size = pntsd_size - dacl_offset;
-	pdacl_size = le16_to_cpu(pdacl->size);
+	end_of_acl = ((char *)pntsd) + acl_size;
+	if (end_of_acl <= (char *)pdacl) {
+		kfree(pntsd);
+		return 0;
+	}
 
-	if (pdacl_size > acl_size || pdacl_size < sizeof(struct smb_acl))
-		goto err_out;
+	if (end_of_acl < (char *)pdacl + le16_to_cpu(pdacl->size) ||
+	    le16_to_cpu(pdacl->size) < sizeof(struct smb_acl)) {
+		kfree(pntsd);
+		return 0;
+	}
 
 	if (!pdacl->num_aces) {
-		if (!(pdacl_size - sizeof(struct smb_acl)) &&
+		if (!(le16_to_cpu(pdacl->size) - sizeof(struct smb_acl)) &&
 		    *pdaccess & ~(FILE_READ_CONTROL_LE | FILE_WRITE_DAC_LE)) {
 			rc = -EACCES;
 			goto err_out;
 		}
-		goto err_out;
+		kfree(pntsd);
+		return 0;
 	}
 
 	if (*pdaccess & FILE_MAXIMAL_ACCESS_LE) {
@@ -1235,16 +1213,11 @@ int smb_check_perm_dacl(struct ksmbd_conn *conn, struct path *path,
 			DELETE;
 
 		ace = (struct smb_ace *)((char *)pdacl + sizeof(struct smb_acl));
-		aces_size = acl_size - sizeof(struct smb_acl);
 		for (i = 0; i < le32_to_cpu(pdacl->num_aces); i++) {
-			if (offsetof(struct smb_ace, access_req) > aces_size)
-				break;
-			ace_size = le16_to_cpu(ace->size);
-			if (ace_size > aces_size)
-				break;
-			aces_size -= ace_size;
 			granted |= le32_to_cpu(ace->access_req);
 			ace = (struct smb_ace *)((char *)ace + le16_to_cpu(ace->size));
+			if (end_of_acl < (char *)ace)
+				goto err_out;
 		}
 
 		if (!pdacl->num_aces)
@@ -1256,15 +1229,7 @@ int smb_check_perm_dacl(struct ksmbd_conn *conn, struct path *path,
 	id_to_sid(uid, sid_type, &sid);
 
 	ace = (struct smb_ace *)((char *)pdacl + sizeof(struct smb_acl));
-	aces_size = acl_size - sizeof(struct smb_acl);
 	for (i = 0; i < le32_to_cpu(pdacl->num_aces); i++) {
-		if (offsetof(struct smb_ace, access_req) > aces_size)
-			break;
-		ace_size = le16_to_cpu(ace->size);
-		if (ace_size > aces_size)
-			break;
-		aces_size -= ace_size;
-
 		if (!compare_sids(&sid, &ace->sid) ||
 		    !compare_sids(&sid_unix_NFS_mode, &ace->sid)) {
 			found = 1;
@@ -1274,6 +1239,8 @@ int smb_check_perm_dacl(struct ksmbd_conn *conn, struct path *path,
 			others_ace = ace;
 
 		ace = (struct smb_ace *)((char *)ace + le16_to_cpu(ace->size));
+		if (end_of_acl < (char *)ace)
+			goto err_out;
 	}
 
 	if (*pdaccess & FILE_MAXIMAL_ACCESS_LE && found) {
@@ -1307,7 +1274,6 @@ int smb_check_perm_dacl(struct ksmbd_conn *conn, struct path *path,
 					if (!access_bits)
 						access_bits =
 							SET_MINIMUM_RIGHTS;
-					posix_acl_release(posix_acls);
 					goto check_access_bits;
 				}
 			}

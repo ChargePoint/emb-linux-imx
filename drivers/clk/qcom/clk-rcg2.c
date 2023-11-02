@@ -13,7 +13,6 @@
 #include <linux/rational.h>
 #include <linux/regmap.h>
 #include <linux/math64.h>
-#include <linux/minmax.h>
 #include <linux/slab.h>
 
 #include <asm/div64.h>
@@ -265,7 +264,7 @@ static int clk_rcg2_determine_floor_rate(struct clk_hw *hw,
 
 static int __clk_rcg2_configure(struct clk_rcg2 *rcg, const struct freq_tbl *f)
 {
-	u32 cfg, mask, d_val, not2d_val, n_minus_m;
+	u32 cfg, mask;
 	struct clk_hw *hw = &rcg->clkr.hw;
 	int ret, index = qcom_find_src_index(hw, rcg->parent_map, f->src);
 
@@ -284,17 +283,8 @@ static int __clk_rcg2_configure(struct clk_rcg2 *rcg, const struct freq_tbl *f)
 		if (ret)
 			return ret;
 
-		/* Calculate 2d value */
-		d_val = f->n;
-
-		n_minus_m = f->n - f->m;
-		n_minus_m *= 2;
-
-		d_val = clamp_t(u32, d_val, f->m, n_minus_m);
-		not2d_val = ~d_val & mask;
-
 		ret = regmap_update_bits(rcg->clkr.regmap,
-				RCG_D_OFFSET(rcg), mask, not2d_val);
+				RCG_D_OFFSET(rcg), mask, ~f->n);
 		if (ret)
 			return ret;
 	}
@@ -406,7 +396,7 @@ static int clk_rcg2_get_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
 static int clk_rcg2_set_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
 {
 	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
-	u32 notn_m, n, m, d, not2d, mask, duty_per, cfg;
+	u32 notn_m, n, m, d, not2d, mask, duty_per;
 	int ret;
 
 	/* Duty-cycle cannot be modified for non-MND RCGs */
@@ -417,11 +407,6 @@ static int clk_rcg2_set_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
 
 	regmap_read(rcg->clkr.regmap, RCG_N_OFFSET(rcg), &notn_m);
 	regmap_read(rcg->clkr.regmap, RCG_M_OFFSET(rcg), &m);
-	regmap_read(rcg->clkr.regmap, RCG_CFG_OFFSET(rcg), &cfg);
-
-	/* Duty-cycle cannot be modified if MND divider is in bypass mode. */
-	if (!(cfg & CFG_MODE_MASK))
-		return -EINVAL;
 
 	n = (~(notn_m) + m) & mask;
 
@@ -430,11 +415,9 @@ static int clk_rcg2_set_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
 	/* Calculate 2d value */
 	d = DIV_ROUND_CLOSEST(n * duty_per * 2, 100);
 
-	/*
-	 * Check bit widths of 2d. If D is too big reduce duty cycle.
-	 * Also make sure it is never zero.
-	 */
-	d = clamp_val(d, 1, mask);
+	 /* Check bit widths of 2d. If D is too big reduce duty cycle. */
+	if (d > mask)
+		d = mask;
 
 	if ((d / 2) > (n - m))
 		d = (n - m) * 2;
@@ -737,7 +720,6 @@ static const struct frac_entry frac_table_pixel[] = {
 	{ 2, 9 },
 	{ 4, 9 },
 	{ 1, 1 },
-	{ 2, 3 },
 	{ }
 };
 

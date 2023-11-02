@@ -195,7 +195,6 @@ void dm_stats_init(struct dm_stats *stats)
 
 	mutex_init(&stats->mutex);
 	INIT_LIST_HEAD(&stats->list);
-	stats->precise_timestamps = false;
 	stats->last = alloc_percpu(struct dm_stats_last_position);
 	for_each_possible_cpu(cpu) {
 		last = per_cpu_ptr(stats->last, cpu);
@@ -225,28 +224,11 @@ void dm_stats_cleanup(struct dm_stats *stats)
 				       atomic_read(&shared->in_flight[READ]),
 				       atomic_read(&shared->in_flight[WRITE]));
 			}
-			cond_resched();
 		}
 		dm_stat_free(&s->rcu_head);
 	}
 	free_percpu(stats->last);
 	mutex_destroy(&stats->mutex);
-}
-
-static void dm_stats_recalc_precise_timestamps(struct dm_stats *stats)
-{
-	struct list_head *l;
-	struct dm_stat *tmp_s;
-	bool precise_timestamps = false;
-
-	list_for_each(l, &stats->list) {
-		tmp_s = container_of(l, struct dm_stat, list_entry);
-		if (tmp_s->stat_flags & STAT_PRECISE_TIMESTAMPS) {
-			precise_timestamps = true;
-			break;
-		}
-	}
-	stats->precise_timestamps = precise_timestamps;
 }
 
 static int dm_stats_create(struct dm_stats *stats, sector_t start, sector_t end,
@@ -331,7 +313,6 @@ static int dm_stats_create(struct dm_stats *stats, sector_t start, sector_t end,
 	for (ni = 0; ni < n_entries; ni++) {
 		atomic_set(&s->stat_shared[ni].in_flight[READ], 0);
 		atomic_set(&s->stat_shared[ni].in_flight[WRITE], 0);
-		cond_resched();
 	}
 
 	if (s->n_histogram_entries) {
@@ -344,7 +325,6 @@ static int dm_stats_create(struct dm_stats *stats, sector_t start, sector_t end,
 		for (ni = 0; ni < n_entries; ni++) {
 			s->stat_shared[ni].tmp.histogram = hi;
 			hi += s->n_histogram_entries + 1;
-			cond_resched();
 		}
 	}
 
@@ -365,7 +345,6 @@ static int dm_stats_create(struct dm_stats *stats, sector_t start, sector_t end,
 			for (ni = 0; ni < n_entries; ni++) {
 				p[ni].histogram = hi;
 				hi += s->n_histogram_entries + 1;
-				cond_resched();
 			}
 		}
 	}
@@ -397,9 +376,6 @@ static int dm_stats_create(struct dm_stats *stats, sector_t start, sector_t end,
 	}
 	ret_id = s->id;
 	list_add_tail_rcu(&s->list_entry, l);
-
-	dm_stats_recalc_precise_timestamps(stats);
-
 	mutex_unlock(&stats->mutex);
 
 	resume_callback(md);
@@ -442,9 +418,6 @@ static int dm_stats_delete(struct dm_stats *stats, int id)
 	}
 
 	list_del_rcu(&s->list_entry);
-
-	dm_stats_recalc_precise_timestamps(stats);
-
 	mutex_unlock(&stats->mutex);
 
 	/*
@@ -501,7 +474,6 @@ static int dm_stats_list(struct dm_stats *stats, const char *program,
 			}
 			DMEMIT("\n");
 		}
-		cond_resched();
 	}
 	mutex_unlock(&stats->mutex);
 
@@ -649,14 +621,13 @@ static void __dm_stat_bio(struct dm_stat *s, int bi_rw,
 
 void dm_stats_account_io(struct dm_stats *stats, unsigned long bi_rw,
 			 sector_t bi_sector, unsigned bi_sectors, bool end,
-			 unsigned long start_time,
+			 unsigned long duration_jiffies,
 			 struct dm_stats_aux *stats_aux)
 {
 	struct dm_stat *s;
 	sector_t end_sector;
 	struct dm_stats_last_position *last;
 	bool got_precise_time;
-	unsigned long duration_jiffies = 0;
 
 	if (unlikely(!bi_sectors))
 		return;
@@ -676,16 +647,16 @@ void dm_stats_account_io(struct dm_stats *stats, unsigned long bi_rw,
 				       ));
 		WRITE_ONCE(last->last_sector, end_sector);
 		WRITE_ONCE(last->last_rw, bi_rw);
-	} else
-		duration_jiffies = jiffies - start_time;
+	}
 
 	rcu_read_lock();
 
 	got_precise_time = false;
 	list_for_each_entry_rcu(s, &stats->list, list_entry) {
 		if (s->stat_flags & STAT_PRECISE_TIMESTAMPS && !got_precise_time) {
-			/* start (!end) duration_ns is set by DM core's alloc_io() */
-			if (end)
+			if (!end)
+				stats_aux->duration_ns = ktime_to_ns(ktime_get());
+			else
 				stats_aux->duration_ns = ktime_to_ns(ktime_get()) - stats_aux->duration_ns;
 			got_precise_time = true;
 		}
@@ -779,7 +750,6 @@ static void __dm_stat_clear(struct dm_stat *s, size_t idx_start, size_t idx_end,
 				local_irq_enable();
 			}
 		}
-		cond_resched();
 	}
 }
 
@@ -895,8 +865,6 @@ static int dm_stats_print(struct dm_stats *stats, int id,
 
 		if (unlikely(sz + 1 >= maxlen))
 			goto buffer_overflow;
-
-		cond_resched();
 	}
 
 	if (clear)

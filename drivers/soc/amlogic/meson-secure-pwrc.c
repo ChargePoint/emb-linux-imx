@@ -139,10 +139,8 @@ static int meson_secure_pwrc_probe(struct platform_device *pdev)
 	}
 
 	pwrc = devm_kzalloc(&pdev->dev, sizeof(*pwrc), GFP_KERNEL);
-	if (!pwrc) {
-		of_node_put(sm_np);
+	if (!pwrc)
 		return -ENOMEM;
-	}
 
 	pwrc->fw = meson_sm_get(sm_np);
 	of_node_put(sm_np);

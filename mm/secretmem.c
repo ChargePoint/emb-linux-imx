@@ -55,28 +55,22 @@ static vm_fault_t secretmem_fault(struct vm_fault *vmf)
 	gfp_t gfp = vmf->gfp_mask;
 	unsigned long addr;
 	struct page *page;
-	vm_fault_t ret;
 	int err;
 
 	if (((loff_t)vmf->pgoff << PAGE_SHIFT) >= i_size_read(inode))
 		return vmf_error(-EINVAL);
 
-	filemap_invalidate_lock_shared(mapping);
-
 retry:
 	page = find_lock_page(mapping, offset);
 	if (!page) {
 		page = alloc_page(gfp | __GFP_ZERO);
-		if (!page) {
-			ret = VM_FAULT_OOM;
-			goto out;
-		}
+		if (!page)
+			return VM_FAULT_OOM;
 
 		err = set_direct_map_invalid_noflush(page);
 		if (err) {
 			put_page(page);
-			ret = vmf_error(err);
-			goto out;
+			return vmf_error(err);
 		}
 
 		__SetPageUptodate(page);
@@ -92,8 +86,7 @@ retry:
 			if (err == -EEXIST)
 				goto retry;
 
-			ret = vmf_error(err);
-			goto out;
+			return vmf_error(err);
 		}
 
 		addr = (unsigned long)page_address(page);
@@ -101,11 +94,7 @@ retry:
 	}
 
 	vmf->page = page;
-	ret = VM_FAULT_LOCKED;
-
-out:
-	filemap_invalidate_unlock_shared(mapping);
-	return ret;
+	return VM_FAULT_LOCKED;
 }
 
 static const struct vm_operations_struct secretmem_vm_ops = {
@@ -169,30 +158,6 @@ const struct address_space_operations secretmem_aops = {
 	.isolate_page	= secretmem_isolate_page,
 };
 
-static int secretmem_setattr(struct user_namespace *mnt_userns,
-			     struct dentry *dentry, struct iattr *iattr)
-{
-	struct inode *inode = d_inode(dentry);
-	struct address_space *mapping = inode->i_mapping;
-	unsigned int ia_valid = iattr->ia_valid;
-	int ret;
-
-	filemap_invalidate_lock(mapping);
-
-	if ((ia_valid & ATTR_SIZE) && inode->i_size)
-		ret = -EINVAL;
-	else
-		ret = simple_setattr(mnt_userns, dentry, iattr);
-
-	filemap_invalidate_unlock(mapping);
-
-	return ret;
-}
-
-static const struct inode_operations secretmem_iops = {
-	.setattr = secretmem_setattr,
-};
-
 static struct vfsmount *secretmem_mnt;
 
 static struct file *secretmem_file_create(unsigned long flags)
@@ -212,7 +177,6 @@ static struct file *secretmem_file_create(unsigned long flags)
 	mapping_set_gfp_mask(inode->i_mapping, GFP_HIGHUSER);
 	mapping_set_unevictable(inode->i_mapping);
 
-	inode->i_op = &secretmem_iops;
 	inode->i_mapping->a_ops = &secretmem_aops;
 
 	/* pretend we are a normal file with zero size */

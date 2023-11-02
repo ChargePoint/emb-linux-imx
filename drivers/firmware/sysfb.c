@@ -34,59 +34,21 @@
 #include <linux/screen_info.h>
 #include <linux/sysfb.h>
 
-static struct platform_device *pd;
-static DEFINE_MUTEX(disable_lock);
-static bool disabled;
-
-static bool sysfb_unregister(void)
-{
-	if (IS_ERR_OR_NULL(pd))
-		return false;
-
-	platform_device_unregister(pd);
-	pd = NULL;
-
-	return true;
-}
-
-/**
- * sysfb_disable() - disable the Generic System Framebuffers support
- *
- * This disables the registration of system framebuffer devices that match the
- * generic drivers that make use of the system framebuffer set up by firmware.
- *
- * It also unregisters a device if this was already registered by sysfb_init().
- *
- * Context: The function can sleep. A @disable_lock mutex is acquired to serialize
- *          against sysfb_init(), that registers a system framebuffer device.
- */
-void sysfb_disable(void)
-{
-	mutex_lock(&disable_lock);
-	sysfb_unregister();
-	disabled = true;
-	mutex_unlock(&disable_lock);
-}
-EXPORT_SYMBOL_GPL(sysfb_disable);
-
 static __init int sysfb_init(void)
 {
 	struct screen_info *si = &screen_info;
 	struct simplefb_platform_data mode;
+	struct platform_device *pd;
 	const char *name;
 	bool compatible;
-	int ret = 0;
-
-	mutex_lock(&disable_lock);
-	if (disabled)
-		goto unlock_mutex;
+	int ret;
 
 	/* try to create a simple-framebuffer device */
 	compatible = sysfb_parse_mode(si, &mode);
 	if (compatible) {
-		pd = sysfb_create_simplefb(si, &mode);
-		if (!IS_ERR(pd))
-			goto unlock_mutex;
+		ret = sysfb_create_simplefb(si, &mode);
+		if (!ret)
+			return 0;
 	}
 
 	/* if the FB is incompatible, create a legacy framebuffer device */
@@ -98,10 +60,8 @@ static __init int sysfb_init(void)
 		name = "platform-framebuffer";
 
 	pd = platform_device_alloc(name, 0);
-	if (!pd) {
-		ret = -ENOMEM;
-		goto unlock_mutex;
-	}
+	if (!pd)
+		return -ENOMEM;
 
 	sysfb_apply_efi_quirks(pd);
 
@@ -113,11 +73,9 @@ static __init int sysfb_init(void)
 	if (ret)
 		goto err;
 
-	goto unlock_mutex;
+	return 0;
 err:
 	platform_device_put(pd);
-unlock_mutex:
-	mutex_unlock(&disable_lock);
 	return ret;
 }
 

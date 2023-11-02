@@ -10,7 +10,6 @@
 #include <linux/export.h>
 #include <linux/libata.h>
 #include <linux/slab.h>
-#include <linux/ktime.h>
 #include "libata.h"
 #include "libata-transport.h"
 #include "ahci.h"
@@ -259,36 +258,25 @@ static const char *sata_pmp_spec_rev_str(const u32 *gscr)
 struct hotplug_priv {
 	struct ata_port *ap;
 	void __iomem *port_mmio;
-	struct mutex mutex;
-	bool poll_thread_created;
 };
-static struct hotplug_priv hpriv;
+struct hotplug_priv hpriv;
 
-#define HOTPLUG_COOLDOWN_MS 1000
+#define TIMER_INTERVAL  (2)
 static int poll_thread(void *t)
 {
 	u32 rc;
-	ktime_t hp_time_now = ktime_get_real();
-	ktime_t hp_cooldown_end = ktime_add_ms(hp_time_now, HOTPLUG_COOLDOWN_MS);
+	struct ata_port *ap = hpriv.ap;
 
 	for (;;) {
-		struct ata_port *ap = hpriv.ap;
 		rc = ata_wait_register(ap, hpriv.port_mmio + PORT_SCR_NTF,
 					0x8000, 0, 1, 2);
 
 		if (rc == 0)
 			continue;
 
-		hp_time_now = ktime_get_real();
-		if (ktime_before(hp_time_now, hp_cooldown_end))
-		  continue;
-		ata_port_info(ap, "i.MX8QM PMP SNotification detected.\n");
-		hp_cooldown_end = ktime_add_ms(hp_time_now, HOTPLUG_COOLDOWN_MS);
-
-		mutex_lock(&(hpriv.mutex));
+		DPRINTK("----- %s %s %d  hotplug detected ----\n", __FILE__,__func__,__LINE__);
 		hpriv.ap->flags |= (1 << 31);
 		sata_async_notification(hpriv.ap);
-		mutex_unlock(&(hpriv.mutex));
 	}
 
 	return 0;
@@ -367,19 +355,11 @@ static int sata_pmp_configure(struct ata_device *dev, int print_info)
 
 #ifdef CONFIG_AHCI_IMX_PMP
 	/* create a polling thread for hotplug */
-	if (hpriv.poll_thread_created) {
-	  mutex_lock(&(hpriv.mutex));
-	  hpriv.ap = ap;
-	  hpriv.port_mmio = ahci_port_base(ap);
-	  mutex_unlock(&(hpriv.mutex));
-	} else {
-	  mutex_init(&(hpriv.mutex));
-	  hpriv.ap = ap;
-	  hpriv.port_mmio = ahci_port_base(ap);
-	  ata_port_info(ap, "i.MX8QM PMP SNotification polling thread created.\n");
-	  kernel_thread(poll_thread, NULL, CLONE_SIGHAND | SIGCHLD);
-	  hpriv.poll_thread_created = true;
-	}
+#if 1
+	hpriv.ap = ap;
+	hpriv.port_mmio = ahci_port_base(ap);
+	kernel_thread(poll_thread, (void *)ap, CLONE_SIGHAND | SIGCHLD);
+#endif
 #endif
 
 	return 0;

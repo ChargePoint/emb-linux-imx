@@ -312,9 +312,10 @@ static int lz4_decompress_pages(struct decompress_io_ctx *dic)
 	}
 
 	if (ret != PAGE_SIZE << dic->log_cluster_size) {
-		printk_ratelimited("%sF2FS-fs (%s): lz4 invalid ret:%d, "
+		printk_ratelimited("%sF2FS-fs (%s): lz4 invalid rlen:%zu, "
 					"expected:%lu\n", KERN_ERR,
-					F2FS_I_SB(dic->inode)->sb->s_id, ret,
+					F2FS_I_SB(dic->inode)->sb->s_id,
+					dic->rlen,
 					PAGE_SIZE << dic->log_cluster_size);
 		return -EIO;
 	}

@@ -243,7 +243,7 @@ static int mt7915_add_interface(struct ieee80211_hw *hw,
 	rcu_assign_pointer(dev->mt76.wcid[idx], &mvif->sta.wcid);
 	if (vif->txq) {
 		mtxq = (struct mt76_txq *)vif->txq->drv_priv;
-		mtxq->wcid = idx;
+		mtxq->wcid = &mvif->sta.wcid;
 	}
 
 	if (vif->type != NL80211_IFTYPE_AP &&

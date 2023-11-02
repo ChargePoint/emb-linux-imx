@@ -2205,8 +2205,6 @@ static struct clk_branch cam_cc_sleep_clk = {
 	},
 };
 
-static struct gdsc titan_top_gdsc;
-
 static struct gdsc bps_gdsc = {
 	.gdscr = 0x7004,
 	.pd = {
@@ -2240,7 +2238,6 @@ static struct gdsc ife_0_gdsc = {
 		.name = "ife_0_gdsc",
 	},
 	.flags = POLL_CFG_GDSCR,
-	.parent = &titan_top_gdsc.pd,
 	.pwrsts = PWRSTS_OFF_ON,
 };
 
@@ -2250,7 +2247,6 @@ static struct gdsc ife_1_gdsc = {
 		.name = "ife_1_gdsc",
 	},
 	.flags = POLL_CFG_GDSCR,
-	.parent = &titan_top_gdsc.pd,
 	.pwrsts = PWRSTS_OFF_ON,
 };
 
@@ -2444,7 +2440,17 @@ static struct platform_driver cam_cc_sm8250_driver = {
 	},
 };
 
-module_platform_driver(cam_cc_sm8250_driver);
+static int __init cam_cc_sm8250_init(void)
+{
+	return platform_driver_register(&cam_cc_sm8250_driver);
+}
+subsys_initcall(cam_cc_sm8250_init);
+
+static void __exit cam_cc_sm8250_exit(void)
+{
+	platform_driver_unregister(&cam_cc_sm8250_driver);
+}
+module_exit(cam_cc_sm8250_exit);
 
 MODULE_DESCRIPTION("QTI CAMCC SM8250 Driver");
 MODULE_LICENSE("GPL v2");

@@ -14,7 +14,6 @@
 #include <sys/wait.h>
 #include <sys/mman.h>
 #include <sys/utsname.h>
-#include <sys/random.h>
 #include <init.h>
 #include <os.h>
 
@@ -95,11 +94,6 @@ static inline void __attribute__ ((noreturn)) uml_abort(void)
 	for (;;)
 		if (kill(getpid(), SIGABRT) < 0)
 			exit(127);
-}
-
-ssize_t os_getrandom(void *buf, size_t len, unsigned int flags)
-{
-	return getrandom(buf, len, flags);
 }
 
 /*

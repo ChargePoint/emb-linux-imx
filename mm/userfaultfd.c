@@ -151,8 +151,6 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 			/* don't free the page */
 			goto out;
 		}
-
-		flush_dcache_page(page);
 	} else {
 		page = *pagep;
 		*pagep = NULL;
@@ -227,10 +225,7 @@ static int mcontinue_atomic_pte(struct mm_struct *dst_mm,
 	struct page *page;
 	int ret;
 
-	ret = shmem_getpage(inode, pgoff, &page, SGP_NOALLOC);
-	/* Our caller expects us to return -EFAULT if we failed to find page. */
-	if (ret == -ENOENT)
-		ret = -EFAULT;
+	ret = shmem_getpage(inode, pgoff, &page, SGP_READ);
 	if (ret)
 		goto out;
 	if (!page) {
@@ -626,7 +621,6 @@ retry:
 				err = -EFAULT;
 				goto out;
 			}
-			flush_dcache_page(page);
 			goto retry;
 		} else
 			BUG_ON(page);

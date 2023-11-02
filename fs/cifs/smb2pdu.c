@@ -268,9 +268,6 @@ smb2_reconnect(__le16 smb2_command, struct cifs_tcon *tcon,
 			ses->binding_chan = NULL;
 			mutex_unlock(&tcon->ses->session_mutex);
 			goto failed;
-		} else if (rc) {
-			mutex_unlock(&ses->session_mutex);
-			goto out;
 		}
 	}
 	/*
@@ -933,17 +930,16 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 	} else if (rc != 0)
 		goto neg_exit;
 
-	rc = -EIO;
 	if (strcmp(server->vals->version_string,
 		   SMB3ANY_VERSION_STRING) == 0) {
 		if (rsp->DialectRevision == cpu_to_le16(SMB20_PROT_ID)) {
 			cifs_server_dbg(VFS,
 				"SMB2 dialect returned but not requested\n");
-			goto neg_exit;
+			return -EIO;
 		} else if (rsp->DialectRevision == cpu_to_le16(SMB21_PROT_ID)) {
 			cifs_server_dbg(VFS,
 				"SMB2.1 dialect returned but not requested\n");
-			goto neg_exit;
+			return -EIO;
 		} else if (rsp->DialectRevision == cpu_to_le16(SMB311_PROT_ID)) {
 			/* ops set to 3.0 by default for default so update */
 			server->ops = &smb311_operations;
@@ -954,7 +950,7 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 		if (rsp->DialectRevision == cpu_to_le16(SMB20_PROT_ID)) {
 			cifs_server_dbg(VFS,
 				"SMB2 dialect returned but not requested\n");
-			goto neg_exit;
+			return -EIO;
 		} else if (rsp->DialectRevision == cpu_to_le16(SMB21_PROT_ID)) {
 			/* ops set to 3.0 by default for default so update */
 			server->ops = &smb21_operations;
@@ -968,7 +964,7 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 		/* if requested single dialect ensure returned dialect matched */
 		cifs_server_dbg(VFS, "Invalid 0x%x dialect returned: not requested\n",
 				le16_to_cpu(rsp->DialectRevision));
-		goto neg_exit;
+		return -EIO;
 	}
 
 	cifs_dbg(FYI, "mode 0x%x\n", rsp->SecurityMode);
@@ -986,10 +982,9 @@ SMB2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 	else {
 		cifs_server_dbg(VFS, "Invalid dialect returned by server 0x%x\n",
 				le16_to_cpu(rsp->DialectRevision));
+		rc = -EIO;
 		goto neg_exit;
 	}
-
-	rc = 0;
 	server->dialect = le16_to_cpu(rsp->DialectRevision);
 
 	/*

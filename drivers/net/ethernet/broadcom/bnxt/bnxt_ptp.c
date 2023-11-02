@@ -61,23 +61,14 @@ static int bnxt_refclk_read(struct bnxt *bp, struct ptp_system_timestamp *sts,
 			    u64 *ns)
 {
 	struct bnxt_ptp_cfg *ptp = bp->ptp_cfg;
-	u32 high_before, high_now, low;
 
 	if (test_bit(BNXT_STATE_IN_FW_RESET, &bp->state))
 		return -EIO;
 
-	high_before = readl(bp->bar0 + ptp->refclk_mapped_regs[1]);
 	ptp_read_system_prets(sts);
-	low = readl(bp->bar0 + ptp->refclk_mapped_regs[0]);
+	*ns = readl(bp->bar0 + ptp->refclk_mapped_regs[0]);
 	ptp_read_system_postts(sts);
-	high_now = readl(bp->bar0 + ptp->refclk_mapped_regs[1]);
-	if (high_now != high_before) {
-		ptp_read_system_prets(sts);
-		low = readl(bp->bar0 + ptp->refclk_mapped_regs[0]);
-		ptp_read_system_postts(sts);
-	}
-	*ns = ((u64)high_now << 32) | low;
-
+	*ns |= (u64)readl(bp->bar0 + ptp->refclk_mapped_regs[1]) << 32;
 	return 0;
 }
 
@@ -340,7 +331,7 @@ static int bnxt_ptp_enable(struct ptp_clock_info *ptp_info,
 	struct bnxt_ptp_cfg *ptp = container_of(ptp_info, struct bnxt_ptp_cfg,
 						ptp_info);
 	struct bnxt *bp = ptp->bp;
-	int pin_id;
+	u8 pin_id;
 	int rc;
 
 	switch (rq->type) {
@@ -348,8 +339,6 @@ static int bnxt_ptp_enable(struct ptp_clock_info *ptp_info,
 		/* Configure an External PPS IN */
 		pin_id = ptp_find_pin(ptp->ptp_clock, PTP_PF_EXTTS,
 				      rq->extts.index);
-		if (!TSIO_PIN_VALID(pin_id))
-			return -EOPNOTSUPP;
 		if (!on)
 			break;
 		rc = bnxt_ptp_cfg_pin(bp, pin_id, BNXT_PPS_PIN_PPS_IN);
@@ -363,8 +352,6 @@ static int bnxt_ptp_enable(struct ptp_clock_info *ptp_info,
 		/* Configure a Periodic PPS OUT */
 		pin_id = ptp_find_pin(ptp->ptp_clock, PTP_PF_PEROUT,
 				      rq->perout.index);
-		if (!TSIO_PIN_VALID(pin_id))
-			return -EOPNOTSUPP;
 		if (!on)
 			break;
 

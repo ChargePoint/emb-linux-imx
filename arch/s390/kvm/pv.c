@@ -168,13 +168,10 @@ int kvm_s390_pv_deinit_vm(struct kvm *kvm, u16 *rc, u16 *rrc)
 	atomic_set(&kvm->mm->context.is_protected, 0);
 	KVM_UV_EVENT(kvm, 3, "PROTVIRT DESTROY VM: rc %x rrc %x", *rc, *rrc);
 	WARN_ONCE(cc, "protvirt destroy vm failed rc %x rrc %x", *rc, *rrc);
-	/* Intended memory leak on "impossible" error */
-	if (!cc) {
+	/* Inteded memory leak on "impossible" error */
+	if (!cc)
 		kvm_s390_pv_dealloc_vm(kvm);
-		return 0;
-	}
-	s390_replace_asce(kvm->arch.gmap);
-	return -EIO;
+	return cc ? -EIO : 0;
 }
 
 int kvm_s390_pv_init_vm(struct kvm *kvm, u16 *rc, u16 *rrc)

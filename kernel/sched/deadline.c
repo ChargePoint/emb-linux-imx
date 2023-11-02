@@ -1561,10 +1561,7 @@ static void enqueue_task_dl(struct rq *rq, struct task_struct *p, int flags)
 		 * the throttle.
 		 */
 		p->dl.dl_throttled = 0;
-		if (!(flags & ENQUEUE_REPLENISH))
-			printk_deferred_once("sched: DL de-boosted task PID %d: REPLENISH flag missing\n",
-					     task_pid_nr(p));
-
+		BUG_ON(!is_dl_boosted(&p->dl) || flags != ENQUEUE_REPLENISH);
 		return;
 	}
 
@@ -1723,7 +1720,6 @@ out:
 
 static void migrate_task_rq_dl(struct task_struct *p, int new_cpu __maybe_unused)
 {
-	struct rq_flags rf;
 	struct rq *rq;
 
 	if (READ_ONCE(p->__state) != TASK_WAKING)
@@ -1735,7 +1731,7 @@ static void migrate_task_rq_dl(struct task_struct *p, int new_cpu __maybe_unused
 	 * from try_to_wake_up(). Hence, p->pi_lock is locked, but
 	 * rq->lock is not... So, lock it
 	 */
-	rq_lock(rq, &rf);
+	raw_spin_rq_lock(rq);
 	if (p->dl.dl_non_contending) {
 		update_rq_clock(rq);
 		sub_running_bw(&p->dl, &rq->dl);
@@ -1751,7 +1747,7 @@ static void migrate_task_rq_dl(struct task_struct *p, int new_cpu __maybe_unused
 			put_task_struct(p);
 	}
 	sub_rq_bw(&p->dl, &rq->dl);
-	rq_unlock(rq, &rf);
+	raw_spin_rq_unlock(rq);
 }
 
 static void check_preempt_equal_dl(struct rq *rq, struct task_struct *p)
@@ -2149,6 +2145,12 @@ static int push_dl_task(struct rq *rq)
 		return 0;
 
 retry:
+	if (is_migration_disabled(next_task))
+		return 0;
+
+	if (WARN_ON(next_task == rq->curr))
+		return 0;
+
 	/*
 	 * If next_task preempts rq->curr, and rq->curr
 	 * can move away, it makes sense to just reschedule
@@ -2160,12 +2162,6 @@ retry:
 		resched_curr(rq);
 		return 0;
 	}
-
-	if (is_migration_disabled(next_task))
-		return 0;
-
-	if (WARN_ON(next_task == rq->curr))
-		return 0;
 
 	/* We might release rq lock */
 	get_task_struct(next_task);
@@ -2864,6 +2860,41 @@ bool dl_param_changed(struct task_struct *p, const struct sched_attr *attr)
 }
 
 #ifdef CONFIG_SMP
+int dl_task_can_attach(struct task_struct *p, const struct cpumask *cs_cpus_allowed)
+{
+	unsigned long flags, cap;
+	unsigned int dest_cpu;
+	struct dl_bw *dl_b;
+	bool overflow;
+	int ret;
+
+	dest_cpu = cpumask_any_and(cpu_active_mask, cs_cpus_allowed);
+
+	rcu_read_lock_sched();
+	dl_b = dl_bw_of(dest_cpu);
+	raw_spin_lock_irqsave(&dl_b->lock, flags);
+	cap = dl_bw_capacity(dest_cpu);
+	overflow = __dl_overflow(dl_b, cap, 0, p->dl.dl_bw);
+	if (overflow) {
+		ret = -EBUSY;
+	} else {
+		/*
+		 * We reserve space for this task in the destination
+		 * root_domain, as we can't fail after this point.
+		 * We will free resources in the source root_domain
+		 * later on (see set_cpus_allowed_dl()).
+		 */
+		int cpus = dl_bw_cpus(dest_cpu);
+
+		__dl_add(dl_b, p->dl.dl_bw, cpus);
+		ret = 0;
+	}
+	raw_spin_unlock_irqrestore(&dl_b->lock, flags);
+	rcu_read_unlock_sched();
+
+	return ret;
+}
+
 int dl_cpuset_cpumask_can_shrink(const struct cpumask *cur,
 				 const struct cpumask *trial)
 {
@@ -2885,7 +2916,7 @@ int dl_cpuset_cpumask_can_shrink(const struct cpumask *cur,
 	return ret;
 }
 
-int dl_cpu_busy(int cpu, struct task_struct *p)
+bool dl_cpu_busy(unsigned int cpu)
 {
 	unsigned long flags, cap;
 	struct dl_bw *dl_b;
@@ -2895,22 +2926,11 @@ int dl_cpu_busy(int cpu, struct task_struct *p)
 	dl_b = dl_bw_of(cpu);
 	raw_spin_lock_irqsave(&dl_b->lock, flags);
 	cap = dl_bw_capacity(cpu);
-	overflow = __dl_overflow(dl_b, cap, 0, p ? p->dl.dl_bw : 0);
-
-	if (!overflow && p) {
-		/*
-		 * We reserve space for this task in the destination
-		 * root_domain, as we can't fail after this point.
-		 * We will free resources in the source root_domain
-		 * later on (see set_cpus_allowed_dl()).
-		 */
-		__dl_add(dl_b, p->dl.dl_bw, dl_bw_cpus(cpu));
-	}
-
+	overflow = __dl_overflow(dl_b, cap, 0, 0);
 	raw_spin_unlock_irqrestore(&dl_b->lock, flags);
 	rcu_read_unlock_sched();
 
-	return overflow ? -EBUSY : 0;
+	return overflow;
 }
 #endif
 

@@ -303,7 +303,10 @@ static enum resp_states get_srq_wqe(struct rxe_qp *qp)
 
 	spin_lock_bh(&srq->rq.consumer_lock);
 
-	wqe = queue_head(q, QUEUE_TYPE_FROM_CLIENT);
+	if (qp->is_user)
+		wqe = queue_head(q, QUEUE_TYPE_FROM_USER);
+	else
+		wqe = queue_head(q, QUEUE_TYPE_KERNEL);
 	if (!wqe) {
 		spin_unlock_bh(&srq->rq.consumer_lock);
 		return RESPST_ERR_RNR;
@@ -319,8 +322,13 @@ static enum resp_states get_srq_wqe(struct rxe_qp *qp)
 	memcpy(&qp->resp.srq_wqe, wqe, size);
 
 	qp->resp.wqe = &qp->resp.srq_wqe.wqe;
-	queue_advance_consumer(q, QUEUE_TYPE_FROM_CLIENT);
-	count = queue_count(q, QUEUE_TYPE_FROM_CLIENT);
+	if (qp->is_user) {
+		advance_consumer(q, QUEUE_TYPE_FROM_USER);
+		count = queue_count(q, QUEUE_TYPE_FROM_USER);
+	} else {
+		advance_consumer(q, QUEUE_TYPE_KERNEL);
+		count = queue_count(q, QUEUE_TYPE_KERNEL);
+	}
 
 	if (srq->limit && srq->ibsrq.event_handler && (count < srq->limit)) {
 		srq->limit = 0;
@@ -349,8 +357,12 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 			qp->resp.status = IB_WC_WR_FLUSH_ERR;
 			return RESPST_COMPLETE;
 		} else if (!srq) {
-			qp->resp.wqe = queue_head(qp->rq.queue,
-					QUEUE_TYPE_FROM_CLIENT);
+			if (qp->is_user)
+				qp->resp.wqe = queue_head(qp->rq.queue,
+						QUEUE_TYPE_FROM_USER);
+			else
+				qp->resp.wqe = queue_head(qp->rq.queue,
+						QUEUE_TYPE_KERNEL);
 			if (qp->resp.wqe) {
 				qp->resp.status = IB_WC_WR_FLUSH_ERR;
 				return RESPST_COMPLETE;
@@ -377,8 +389,12 @@ static enum resp_states check_resource(struct rxe_qp *qp,
 		if (srq)
 			return get_srq_wqe(qp);
 
-		qp->resp.wqe = queue_head(qp->rq.queue,
-				QUEUE_TYPE_FROM_CLIENT);
+		if (qp->is_user)
+			qp->resp.wqe = queue_head(qp->rq.queue,
+					QUEUE_TYPE_FROM_USER);
+		else
+			qp->resp.wqe = queue_head(qp->rq.queue,
+					QUEUE_TYPE_KERNEL);
 		return (qp->resp.wqe) ? RESPST_CHK_LENGTH : RESPST_ERR_RNR;
 	}
 
@@ -814,10 +830,6 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 			return RESPST_ERR_INVALIDATE_RKEY;
 	}
 
-	if (pkt->mask & RXE_END_MASK)
-		/* We successfully processed this new request. */
-		qp->resp.msn++;
-
 	/* next expected psn, read handles this separately */
 	qp->resp.psn = (pkt->psn + 1) & BTH_PSN_MASK;
 	qp->resp.ack_psn = qp->resp.psn;
@@ -825,9 +837,11 @@ static enum resp_states execute(struct rxe_qp *qp, struct rxe_pkt_info *pkt)
 	qp->resp.opcode = pkt->opcode;
 	qp->resp.status = IB_WC_SUCCESS;
 
-	if (pkt->mask & RXE_COMP_MASK)
+	if (pkt->mask & RXE_COMP_MASK) {
+		/* We successfully processed this new request. */
+		qp->resp.msn++;
 		return RESPST_COMPLETE;
-	else if (qp_type(qp) == IB_QPT_RC)
+	} else if (qp_type(qp) == IB_QPT_RC)
 		return RESPST_ACKNOWLEDGE;
 	else
 		return RESPST_CLEANUP;
@@ -922,8 +936,12 @@ static enum resp_states do_complete(struct rxe_qp *qp,
 	}
 
 	/* have copy for srq and reference for !srq */
-	if (!qp->srq)
-		queue_advance_consumer(qp->rq.queue, QUEUE_TYPE_FROM_CLIENT);
+	if (!qp->srq) {
+		if (qp->is_user)
+			advance_consumer(qp->rq.queue, QUEUE_TYPE_FROM_USER);
+		else
+			advance_consumer(qp->rq.queue, QUEUE_TYPE_KERNEL);
+	}
 
 	qp->resp.wqe = NULL;
 
@@ -1195,7 +1213,7 @@ static void rxe_drain_req_pkts(struct rxe_qp *qp, bool notify)
 		return;
 
 	while (!qp->srq && q && queue_head(q, q->type))
-		queue_advance_consumer(q, q->type);
+		advance_consumer(q, q->type);
 }
 
 int rxe_responder(void *arg)

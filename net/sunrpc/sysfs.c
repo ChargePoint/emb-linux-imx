@@ -282,10 +282,8 @@ static ssize_t rpc_sysfs_xprt_state_change(struct kobject *kobj,
 	int offline = 0, online = 0, remove = 0;
 	struct rpc_xprt_switch *xps = rpc_sysfs_xprt_kobj_get_xprt_switch(kobj);
 
-	if (!xprt || !xps) {
-		count = 0;
-		goto out_put;
-	}
+	if (!xprt)
+		return 0;
 
 	if (!strncmp(buf, "offline", 7))
 		offline = 1;

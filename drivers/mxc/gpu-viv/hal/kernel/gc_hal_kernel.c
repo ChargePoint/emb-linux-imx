@@ -528,7 +528,6 @@ gckKERNEL_Construct(
     gctUINT64 data;
     gctUINT32 recovery;
     gctUINT32 stuckDump;
-    gctUINT gpuTimeout = 0;
     gctUINT64 dynamicMap = 1;
 
     gcmkHEADER_ARG("Os=%p Context=%p", Os, Context);
@@ -663,16 +662,7 @@ gckKERNEL_Construct(
         gcmkONERROR(
             gckVGKERNEL_Construct(Os, Context, kernel, &kernel->vg));
 
-        status = gckOS_QueryOption(Os, "gpuTimeout", &data);
-        if (gcmIS_SUCCESS(status))
-        {
-            gpuTimeout = (gctUINT)data;
-        }
-        else
-        {
-            gpuTimeout = gcdGPU_TIMEOUT;
-        }
-        kernel->timeOut = gpuTimeout;
+        kernel->timeOut = gcdGPU_TIMEOUT;
 
         status = gckOS_QueryOption(Os, "contiguousBase", &contiguousBase);
 
@@ -711,18 +701,9 @@ gckKERNEL_Construct(
             kernel->sRAMPhysFaked[i] = gcvFALSE;
         }
 
-        status = gckOS_QueryOption(Os, "gpuTimeout", &data);
-        if (gcmIS_SUCCESS(status))
-        {
-            gpuTimeout = (gctUINT)data;
-        }
-        else
-        {
-            gpuTimeout = gcdGPU_TIMEOUT;
-        }
         kernel->timeOut = kernel->hardware->type == gcvHARDWARE_2D
                         ? gcdGPU_2D_TIMEOUT
-                        : gpuTimeout
+                        : gcdGPU_TIMEOUT
                         ;
 
 #if gcdSHARED_PAGETABLE
@@ -1680,9 +1661,11 @@ _ReleaseVideoMemory(
             type,
             gcmINT2PTR(Handle)));
 
-    gcmkONERROR(gckVIDMEM_HANDLE_Dereference(Kernel, ProcessID, Handle));
+    gcmkONERROR(
+        gckVIDMEM_HANDLE_Dereference(Kernel, ProcessID, Handle));
 
-    gcmkONERROR(gckVIDMEM_NODE_Dereference(Kernel, nodeObject));
+    gcmkONERROR(
+        gckVIDMEM_NODE_Dereference(Kernel, nodeObject));
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -1967,7 +1950,7 @@ _BottomHalfUnlockVideoMemory(
         ));
 
     /* Deref handle. */
-    gcmkONERROR(gckVIDMEM_HANDLE_Dereference(Kernel, ProcessID, Node));
+    gckVIDMEM_HANDLE_Dereference(Kernel, ProcessID, Node);
 
     /* Unlock video memory, synced. */
     gcmkONERROR(gckVIDMEM_NODE_Unlock(Kernel, nodeObject, ProcessID, gcvNULL));
@@ -4082,22 +4065,9 @@ gckKERNEL_AttachProcessEx(
 
         if (Kernel->timeoutPID == PID && Kernel->hardware != gcvNULL)
         {
-            gceSTATUS sta;
-            gctUINT gpuTimeout = 0;
-            gctUINT64 data;
-
-            sta = gckOS_QueryOption(Kernel->os, "gpuTimeout", &data);
-            if (gcmIS_SUCCESS(sta))
-            {
-                gpuTimeout = (gctUINT)data;
-            }
-            else
-            {
-                gpuTimeout = gcdGPU_TIMEOUT;
-            }
             Kernel->timeOut = Kernel->hardware->type == gcvHARDWARE_2D
                             ? gcdGPU_2D_TIMEOUT
-                            : gpuTimeout;
+                            : gcdGPU_TIMEOUT;
         }
     }
 

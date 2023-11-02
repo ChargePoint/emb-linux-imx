@@ -49,13 +49,6 @@ properties:
     enum: [ 0, 1 ]
     default: 0
 
-required:
-  - compatible
-  - reg
-  - interrupts
-  - clock-names
-  - clocks
-
 unevaluatedProperties: false
 
 examples:

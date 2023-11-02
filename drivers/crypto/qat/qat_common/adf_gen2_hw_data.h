@@ -111,7 +111,6 @@ do { \
 	(ADF_ARB_REG_SLOT * (index)), value)
 
 /* Power gating */
-#define ADF_POWERGATE_DC		BIT(23)
 #define ADF_POWERGATE_PKE		BIT(24)
 
 /* WDT timers

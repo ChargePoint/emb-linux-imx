@@ -71,6 +71,10 @@
 
 &spi0 {
 	flash@0 {
+		spi-max-frequency = <108000000>;
+		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <4>;
+
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;
@@ -108,6 +112,7 @@
 
 &usb3 {
 	usb-phy = <&usb3_phy>;
+	status = "disabled";
 };
 
 &mdio {

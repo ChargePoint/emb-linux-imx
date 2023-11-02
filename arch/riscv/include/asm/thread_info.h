@@ -11,17 +11,11 @@
 #include <asm/page.h>
 #include <linux/const.h>
 
-#ifdef CONFIG_KASAN
-#define KASAN_STACK_ORDER 1
-#else
-#define KASAN_STACK_ORDER 0
-#endif
-
 /* thread information allocation */
 #ifdef CONFIG_64BIT
-#define THREAD_SIZE_ORDER	(2 + KASAN_STACK_ORDER)
+#define THREAD_SIZE_ORDER	(2)
 #else
-#define THREAD_SIZE_ORDER	(1 + KASAN_STACK_ORDER)
+#define THREAD_SIZE_ORDER	(1)
 #endif
 #define THREAD_SIZE		(PAGE_SIZE << THREAD_SIZE_ORDER)
 
@@ -41,8 +35,6 @@
 #define SHADOW_OVERFLOW_STACK_SIZE (1024)
 
 #ifndef __ASSEMBLY__
-
-extern long shadow_stack[SHADOW_OVERFLOW_STACK_SIZE / sizeof(long)];
 
 #include <asm/processor.h>
 #include <asm/csr.h>

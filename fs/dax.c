@@ -846,8 +846,7 @@ static void dax_entry_mkclean(struct address_space *mapping, pgoff_t index,
 			if (!pmd_dirty(*pmdp) && !pmd_write(*pmdp))
 				goto unlock_pmd;
 
-			flush_cache_range(vma, address,
-					  address + HPAGE_PMD_SIZE);
+			flush_cache_page(vma, address, pfn);
 			pmd = pmdp_invalidate(vma, address, pmdp);
 			pmd = pmd_wrprotect(pmd);
 			pmd = pmd_mkclean(pmd);
@@ -1278,9 +1277,6 @@ dax_iomap_rw(struct kiocb *iocb, struct iov_iter *iter,
 	};
 	loff_t done = 0;
 	int ret;
-
-	if (!iomi.len)
-		return 0;
 
 	if (iov_iter_rw(iter) == WRITE) {
 		lockdep_assert_held_write(&iomi.inode->i_rwsem);

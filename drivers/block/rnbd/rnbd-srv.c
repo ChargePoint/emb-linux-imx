@@ -266,12 +266,12 @@ out:
 static int create_sess(struct rtrs_srv *rtrs)
 {
 	struct rnbd_srv_session *srv_sess;
-	char pathname[NAME_MAX];
+	char sessname[NAME_MAX];
 	int err;
 
-	err = rtrs_srv_get_path_name(rtrs, pathname, sizeof(pathname));
+	err = rtrs_srv_get_sess_name(rtrs, sessname, sizeof(sessname));
 	if (err) {
-		pr_err("rtrs_srv_get_path_name(%s): %d\n", pathname, err);
+		pr_err("rtrs_srv_get_sess_name(%s): %d\n", sessname, err);
 
 		return err;
 	}
@@ -284,8 +284,8 @@ static int create_sess(struct rtrs_srv *rtrs)
 			  offsetof(struct rnbd_dev_blk_io, bio),
 			  BIOSET_NEED_BVECS);
 	if (err) {
-		pr_err("Allocating srv_session for path %s failed\n",
-		       pathname);
+		pr_err("Allocating srv_session for session %s failed\n",
+		       sessname);
 		kfree(srv_sess);
 		return err;
 	}
@@ -298,7 +298,7 @@ static int create_sess(struct rtrs_srv *rtrs)
 	mutex_unlock(&sess_lock);
 
 	srv_sess->rtrs = rtrs;
-	strscpy(srv_sess->sessname, pathname, sizeof(srv_sess->sessname));
+	strscpy(srv_sess->sessname, sessname, sizeof(srv_sess->sessname));
 
 	rtrs_srv_set_sess_priv(rtrs, srv_sess);
 
@@ -333,11 +333,10 @@ void rnbd_srv_sess_dev_force_close(struct rnbd_srv_sess_dev *sess_dev,
 {
 	struct rnbd_srv_session	*sess = sess_dev->sess;
 
+	sess_dev->keep_id = true;
 	/* It is already started to close by client's close message. */
 	if (!mutex_trylock(&sess->lock))
 		return;
-
-	sess_dev->keep_id = true;
 	/* first remove sysfs itself to avoid deadlock */
 	sysfs_remove_file_self(&sess_dev->kobj, &attr->attr);
 	rnbd_srv_destroy_dev_session_sysfs(sess_dev);

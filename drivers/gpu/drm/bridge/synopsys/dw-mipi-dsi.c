@@ -12,7 +12,6 @@
 #include <linux/component.h>
 #include <linux/debugfs.h>
 #include <linux/iopoll.h>
-#include <linux/math64.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/pm_runtime.h>
@@ -387,6 +386,8 @@ static int dw_mipi_dsi_host_detach(struct mipi_dsi_host *host,
 
 	drm_of_panel_bridge_remove(host->dev->of_node, 1, 0);
 
+	drm_bridge_remove(&dsi->bridge);
+
 	return 0;
 }
 
@@ -653,7 +654,7 @@ static void dw_mipi_dsi_init(struct dw_mipi_dsi *dsi)
 	 * timeout clock division should be computed with the
 	 * high speed transmission counter timeout and byte lane...
 	 */
-	dsi_write(dsi, DSI_CLKMGR_CFG, TO_CLK_DIVISION(0) |
+	dsi_write(dsi, DSI_CLKMGR_CFG, TO_CLK_DIVISION(10) |
 		  TX_ESC_CLK_DIVISION(esc_clk_division));
 }
 
@@ -732,15 +733,8 @@ static u32 dw_mipi_dsi_get_hcomponent_lbcc(struct dw_mipi_dsi *dsi,
 					   u32 hcomponent)
 {
 	u32 frac, lbcc;
-	int bpp;
 
-	bpp = mipi_dsi_pixel_format_to_bpp(dsi->format);
-	if (bpp < 0) {
-		dev_err(dsi->dev, "failed to get bpp\n");
-		return 0;
-	}
-
-	lbcc = div_u64((u64)hcomponent * mode->clock * bpp, dsi->lanes * 8);
+	lbcc = hcomponent * dsi->lane_mbps * MSEC_PER_SEC / 8;
 
 	frac = lbcc % mode->clock;
 	lbcc = lbcc / mode->clock;
@@ -1205,7 +1199,6 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	ret = mipi_dsi_host_register(&dsi->dsi_host);
 	if (ret) {
 		dev_err(dev, "Failed to register MIPI host: %d\n", ret);
-		pm_runtime_disable(dev);
 		dw_mipi_dsi_debugfs_remove(dsi);
 		return ERR_PTR(ret);
 	}
@@ -1222,8 +1215,6 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 
 static void __dw_mipi_dsi_remove(struct dw_mipi_dsi *dsi)
 {
-	drm_bridge_remove(&dsi->bridge);
-
 	mipi_dsi_host_unregister(&dsi->dsi_host);
 
 	pm_runtime_disable(dsi->dev);
