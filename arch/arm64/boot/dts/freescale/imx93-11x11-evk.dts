@@ -148,6 +148,18 @@
 		enable-active-low;
 	};
 
+	reg_usdhc1_vmmc: regulator-usdhc1 {
+		compatible = "regulator-fixed";
+		regulator-name = "WIFI_EN";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&ioexp0 1 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+		regulator-always-on;
+		status = "okay";
+	};
+
 	reg_usdhc2_vmmc: regulator-usdhc2 {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default";
@@ -822,11 +834,7 @@
 };
 
 &usbotg1 {
-	dr_mode = "otg";
-	hnp-disable;
-	srp-disable;
-	adp-disable;
-	usb-role-switch;
+	dr_mode = "host";
 	disable-over-current;
 	samsung,picophy-pre-emp-curr-control = <3>;
 	samsung,picophy-dc-vol-level-adjust = <7>;
@@ -834,11 +842,7 @@
 };
 
 &usbotg2 {
-	dr_mode = "otg";
-	hnp-disable;
-	srp-disable;
-	adp-disable;
-	usb-role-switch;
+	dr_mode = "host";
 	disable-over-current;
 	samsung,picophy-pre-emp-curr-control = <3>;
 	samsung,picophy-dc-vol-level-adjust = <7>;
@@ -850,11 +854,14 @@
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1>;
 	pinctrl-2 = <&pinctrl_usdhc1>;
+	vqmmc-supply = <&reg_usdhc1_vmmc>;
 	bus-width = <4>;
+	pm-ignore-notify;
+	keep-power-in-suspend;
+	wifi-host;
 	non-removable;
 	status = "okay";
-	no-mmc-hs400;
-	max-frequency = <100000000>;
+	max-frequency = <50000000>;
 };
 
 &usdhc2 {
@@ -862,12 +869,13 @@
 	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-1 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
-	cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
 	vmmc-supply = <&reg_usdhc2_vmmc>;
 	bus-width = <4>;
 	status = "okay";
-	no-sdio;
-	no-mmc;
+	no-mmc-hs400;
+	max-frequency = <50000000>;
+	non-removable;
+	broken-cd;
 };
 
 &lpspi1 {
@@ -959,12 +967,26 @@
 // 		>;
 // 	};
 
+	pinctrl_gpio3: gpio3grp {
+		fsl,pins = <
+			MX93_PAD_CCM_CLKO1__GPIO3_IO26		0x31e	// CELL_RSTn
+			MX93_PAD_CCM_CLKO2__GPIO3_IO27		0x31e	// CELL_PWRKEY
+		>;
+	};
+
+	pinctrl_gpio4: gpio4grp {
+		fsl,pins = <
+			MX93_PAD_ENET1_TD1__GPIO4_IO04		0x31e	// IOEXP_EN
+			MX93_PAD_ENET1_RXC__GPIO4_IO09		0x31e	// WIFI_WAKEn
+			MX93_PAD_CCM_CLKO3__GPIO4_IO28		0x31e	// CELL_W_ENABLE
+			MX93_PAD_CCM_CLKO4__GPIO4_IO29		0x31e	// CELL_SIM_SEL
+		>;
+	};
 
 	pinctrl_lpi2c1: lpi2c1grp {
 		fsl,pins = <
 			MX93_PAD_I2C1_SCL__LPI2C1_SCL			0x40000b9e
 			MX93_PAD_I2C1_SDA__LPI2C1_SDA			0x40000b9e
-			MX93_PAD_ENET1_TD1__GPIO4_IO04 0x31e
 		>;
 	};
 
@@ -990,7 +1012,7 @@
 			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x57e
 			MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x57e
 			MX93_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x57e
-			MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x5fe
+			// MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x5fe
 			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x57e
 			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x57e
 			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x57e
@@ -1047,11 +1069,11 @@
 			MX93_PAD_SD1_DATA1__USDHC1_DATA1	0x13fe
 			MX93_PAD_SD1_DATA2__USDHC1_DATA2	0x13fe
 			MX93_PAD_SD1_DATA3__USDHC1_DATA3	0x13fe
-			MX93_PAD_SD1_DATA4__USDHC1_DATA4	0x13fe
-			MX93_PAD_SD1_DATA5__USDHC1_DATA5	0x13fe
-			MX93_PAD_SD1_DATA6__USDHC1_DATA6	0x13fe
-			MX93_PAD_SD1_DATA7__USDHC1_DATA7	0x13fe
-			MX93_PAD_SD1_STROBE__USDHC1_STROBE	0x15fe
+			// MX93_PAD_SD1_DATA4__USDHC1_DATA4	0x13fe
+			// MX93_PAD_SD1_DATA5__USDHC1_DATA5	0x13fe
+			// MX93_PAD_SD1_DATA6__USDHC1_DATA6	0x13fe
+			// MX93_PAD_SD1_DATA7__USDHC1_DATA7	0x13fe
+			// MX93_PAD_SD1_STROBE__USDHC1_STROBE	0x15fe
 		>;
 	};
 
