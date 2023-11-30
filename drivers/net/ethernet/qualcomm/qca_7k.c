@@ -60,13 +60,9 @@ qcaspi_read_register(struct qcaspi *qca, u16 reg, u16 *result)
 	tx_data = cpu_to_be16(QCA7K_SPI_READ | QCA7K_SPI_INTERNAL | reg);
 	*result = 0;
 
-	rx_delay.unit = SPI_DELAY_UNIT_USECS;
-	rx_delay.value = 100;
-
 	transfer[0].tx_buf = &tx_data;
 	transfer[0].len = QCASPI_CMD_LEN;
-	transfer[0].delay = rx_delay;
-	transfer[1].rx_buf = &rx_data;
+		transfer[1].rx_buf = &rx_data;
 	transfer[1].len = QCASPI_CMD_LEN;
 
 	spi_message_enqueue(&transfer[0], &msg);
