@@ -118,8 +118,8 @@ qcaspi_write_burst(struct qcaspi *qca, u8 *src, u32 len)
 	transfer[1].tx_buf = src;
 	transfer[1].len = len;
 
-	spi_message_add_tail(&transfer[0], &msg);
-	spi_message_add_tail(&transfer[1], &msg);
+	spi_message_enqueue(&transfer[0], &msg);
+	spi_message_enqueue(&transfer[1], &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (ret || (msg.actual_length != QCASPI_CMD_LEN + len)) {
@@ -143,7 +143,7 @@ qcaspi_write_legacy(struct qcaspi *qca, u8 *src, u32 len)
 	transfer.tx_buf = src;
 	transfer.len = len;
 
-	spi_message_add_tail(&transfer, &msg);
+	spi_message_enqueue(&transfer, &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (ret || (msg.actual_length != len)) {
@@ -171,8 +171,8 @@ qcaspi_read_burst(struct qcaspi *qca, u8 *dst, u32 len)
 	transfer[1].rx_buf = dst;
 	transfer[1].len = len;
 
-	spi_message_add_tail(&transfer[0], &msg);
-	spi_message_add_tail(&transfer[1], &msg);
+	spi_message_enqueue(&transfer[0], &msg);
+	spi_message_enqueue(&transfer[1], &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (ret || (msg.actual_length != QCASPI_CMD_LEN + len)) {
@@ -196,7 +196,7 @@ qcaspi_read_legacy(struct qcaspi *qca, u8 *dst, u32 len)
 	transfer.rx_buf = dst;
 	transfer.len = len;
 
-	spi_message_add_tail(&transfer, &msg);
+	spi_message_enqueue(&transfer, &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (ret || (msg.actual_length != len)) {
@@ -222,7 +222,7 @@ qcaspi_tx_cmd(struct qcaspi *qca, u16 cmd)
 	tx_data = cpu_to_be16(cmd);
 	transfer.len = sizeof(cmd);
 	transfer.tx_buf = &tx_data;
-	spi_message_add_tail(&transfer, &msg);
+	spi_message_enqueue(&transfer, &msg);
 
 	ret = spi_sync(qca->spi_dev, &msg);
 

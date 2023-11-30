@@ -26,8 +26,11 @@
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
 #include <linux/spi/spi.h>
+#include <linux/delay.h>
 
 #include "qca_7k.h"
+
+inline void spi_message_enqueue(struct spi_transfer *t, struct spi_message *m);
 
 void
 qcaspi_spi_error(struct qcaspi *qca)
@@ -46,6 +49,7 @@ qcaspi_read_register(struct qcaspi *qca, u16 reg, u16 *result)
 	__be16 rx_data;
 	__be16 tx_data;
 	struct spi_transfer transfer[2];
+	struct spi_delay rx_delay;
 	struct spi_message msg;
 	int ret;
 
@@ -56,19 +60,23 @@ qcaspi_read_register(struct qcaspi *qca, u16 reg, u16 *result)
 	tx_data = cpu_to_be16(QCA7K_SPI_READ | QCA7K_SPI_INTERNAL | reg);
 	*result = 0;
 
+	rx_delay.unit = SPI_DELAY_UNIT_USECS;
+	rx_delay.value = 100;
+
 	transfer[0].tx_buf = &tx_data;
 	transfer[0].len = QCASPI_CMD_LEN;
+	transfer[0].delay = rx_delay;
 	transfer[1].rx_buf = &rx_data;
 	transfer[1].len = QCASPI_CMD_LEN;
 
-	spi_message_add_tail(&transfer[0], &msg);
-
-	if (qca->legacy_mode) {
+	spi_message_enqueue(&transfer[0], &msg);
+	
+		if (qca->legacy_mode) {
 		spi_sync(qca->spi_dev, &msg);
 		spi_message_init(&msg);
 	}
-	spi_message_add_tail(&transfer[1], &msg);
-	ret = spi_sync(qca->spi_dev, &msg);
+	spi_message_enqueue(&transfer[1], &msg);
+		ret = spi_sync(qca->spi_dev, &msg);
 
 	if (!ret)
 		ret = msg.status;
@@ -101,12 +109,12 @@ __qcaspi_write_register(struct qcaspi *qca, u16 reg, u16 value)
 	transfer[1].tx_buf = &tx_data[1];
 	transfer[1].len = QCASPI_CMD_LEN;
 
-	spi_message_add_tail(&transfer[0], &msg);
+	spi_message_enqueue(&transfer[0], &msg);
 	if (qca->legacy_mode) {
 		spi_sync(qca->spi_dev, &msg);
 		spi_message_init(&msg);
 	}
-	spi_message_add_tail(&transfer[1], &msg);
+	spi_message_enqueue(&transfer[1], &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (!ret)
@@ -146,4 +154,10 @@ qcaspi_write_register(struct qcaspi *qca, u16 reg, u16 value, int retry)
 	} while (i <= retry);
 
 	return ret;
+}
+
+inline void spi_message_enqueue(struct spi_transfer *t, struct spi_message *m) {
+	struct spi_delay rx_delay = {.unit=SPI_DELAY_UNIT_USECS, .value=100};
+	t->delay = rx_delay;
+	spi_message_add_tail(t,m);
 }
