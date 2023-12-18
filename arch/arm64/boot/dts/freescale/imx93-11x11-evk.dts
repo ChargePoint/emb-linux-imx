@@ -799,6 +799,14 @@
 			};
 		};
 	};
+        capacitive_touch@28 {
+                #compatible = "ti,lp5012";
+                reg = <0x28>;
+                #address-cells = <1>;
+                #size-cells = <0>;
+	};
+
+
 };
 
 &lpuart1 { /* console */
