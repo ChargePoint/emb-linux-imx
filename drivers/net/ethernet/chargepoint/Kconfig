@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# ChargePoint network device configuration
+#
+
+config NET_VENDOR_CHARGEPOINT
+	bool "ChargePoint ethernet devices"
+	default y
+	help
+	  If you have a network (Ethernet) card belonging to this class, say Y.
+
+	  Note that the answer to this question doesn't directly affect the
+	  kernel: saying N will just cause the configurator to skip all
+	  the questions about Qualcomm cards. If you say Y, you will be asked
+	  for your specific card in the following questions.
+
+if NET_VENDOR_CHARGEPOINT
+
+config ETH_SPI
+	tristate "Ethernet over SPI based on Qualcomm Atheros QCA7000"
+	depends on SPI_MASTER && OF
+	help
+	  This SPI protocol driver supports ethernet over spi for ChargePoint devices.
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called eth-spi.
+
+endif # NET_VENDOR_CHARGEPOINT
