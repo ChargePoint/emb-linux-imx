@@ -35,7 +35,7 @@
 #include "qca_7k_common.h"
 
 #define QCASPI_DRV_VERSION "0.2.7-i"
-#define QCASPI_DRV_NAME    "qcaspi"
+#define QCASPI_DRV_NAME    "eth-spi"
 
 #define QCASPI_GOOD_SIGNATURE 0xAA55
 

@@ -1,16 +1,12 @@
-* Qualcomm QCA7000
+* ChargePoint Ethernet over SPI
 
-The QCA7000 is a serial-to-powerline bridge with a host interface which could
-be configured either as SPI or UART slave. This configuration is done by
-the QCA7000 firmware.
+The ChargePoint Ethernet over SPI is based on Qualcom QCA7000.
 
-(a) Ethernet over SPI
-
-In order to use the QCA7000 as SPI device it must be defined as a child of a
+In order to use the Ethernet over SPI it must be defined as a child of a
 SPI master in the device tree.
 
 Required properties:
-- compatible	    : Should be "qca,qca7000"
+- compatible	    : Should be "cp,eth-spi"
 - reg		    : Should specify the SPI chip select
 - interrupts	    : The first cell should specify the index of the source
 		      interrupt and the second cell should specify the trigger
@@ -43,8 +39,8 @@ ssp2: spi@80014000 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&spi2_pins_a>;
 
-	qca7000: ethernet@0 {
-		compatible = "qca,qca7000";
+	ethspi: ethernet@0 {
+		compatible = "cp,eth-spi";
 		reg = <0x0>;
 		interrupt-parent = <&gpio3>;      /* GPIO Bank 3 */
 		interrupts = <25 0x1>;            /* Index: 25, rising edge */
@@ -55,33 +51,3 @@ ssp2: spi@80014000 {
 	};
 };
 
-(b) Ethernet over UART
-
-In order to use the QCA7000 as UART slave it must be defined as a child of a
-UART master in the device tree. It is possible to preconfigure the UART
-settings of the QCA7000 firmware, but it's not possible to change them during
-runtime.
-
-Required properties:
-- compatible        : Should be "qca,qca7000"
-
-Optional properties:
-- local-mac-address : see ./ethernet.txt
-- current-speed     : current baud rate of QCA7000 which defaults to 115200
-		      if absent, see also ../serial/serial.yaml
-
-UART Example:
-
-/* Freescale i.MX28 UART */
-auart0: serial@8006a000 {
-	compatible = "fsl,imx28-auart", "fsl,imx23-auart";
-	reg = <0x8006a000 0x2000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&auart0_2pins_a>;
-
-	qca7000: ethernet {
-		compatible = "qca,qca7000";
-		local-mac-address = [ A0 B0 C0 D0 E0 F0 ];
-		current-speed = <38400>;
-	};
-};

@@ -878,7 +878,7 @@ qcaspi_netdev_setup(struct net_device *dev)
 }
 
 static const struct of_device_id qca_spi_of_match[] = {
-	{ .compatible = "qca,qca7000" },
+	{ .compatible = "cp,eth-spi" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, qca_spi_of_match);
@@ -1013,7 +1013,7 @@ qca_spi_remove(struct spi_device *spi)
 }
 
 static const struct spi_device_id qca_spi_id[] = {
-	{ "qca7000", 0 },
+	{ "eth-spi", 0 },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(spi, qca_spi_id);
@@ -1029,7 +1029,7 @@ static struct spi_driver qca_spi_driver = {
 };
 module_spi_driver(qca_spi_driver);
 
-MODULE_DESCRIPTION("Qualcomm Atheros QCA7000 SPI Driver");
+MODULE_DESCRIPTION("ChargePoint ethernet over spi driver based on QCA7000");
 MODULE_AUTHOR("Qualcomm Atheros Communications");
 MODULE_AUTHOR("Stefan Wahren <stefan.wahren@i2se.com>");
 MODULE_LICENSE("Dual BSD/GPL");
