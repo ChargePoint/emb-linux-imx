@@ -26,6 +26,7 @@
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
 #include <linux/spi/spi.h>
+#include <linux/delay.h>
 
 #include "qca_7k.h"
 
@@ -61,13 +62,13 @@ qcaspi_read_register(struct qcaspi *qca, u16 reg, u16 *result)
 	transfer[1].rx_buf = &rx_data;
 	transfer[1].len = QCASPI_CMD_LEN;
 
-	spi_message_add_tail(&transfer[0], &msg);
+	spi_message_enqueue(&transfer[0], &msg);
 
 	if (qca->legacy_mode) {
 		spi_sync(qca->spi_dev, &msg);
 		spi_message_init(&msg);
 	}
-	spi_message_add_tail(&transfer[1], &msg);
+	spi_message_enqueue(&transfer[1], &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (!ret)
@@ -101,12 +102,12 @@ __qcaspi_write_register(struct qcaspi *qca, u16 reg, u16 value)
 	transfer[1].tx_buf = &tx_data[1];
 	transfer[1].len = QCASPI_CMD_LEN;
 
-	spi_message_add_tail(&transfer[0], &msg);
+	spi_message_enqueue(&transfer[0], &msg);
 	if (qca->legacy_mode) {
 		spi_sync(qca->spi_dev, &msg);
 		spi_message_init(&msg);
 	}
-	spi_message_add_tail(&transfer[1], &msg);
+	spi_message_enqueue(&transfer[1], &msg);
 	ret = spi_sync(qca->spi_dev, &msg);
 
 	if (!ret)
@@ -146,4 +147,9 @@ qcaspi_write_register(struct qcaspi *qca, u16 reg, u16 value, int retry)
 	} while (i <= retry);
 
 	return ret;
+}
+
+inline void spi_message_enqueue(struct spi_transfer *t, struct spi_message *m) {
+	t->delay = (struct spi_delay){.unit=SPI_DELAY_UNIT_USECS, .value=250};
+	spi_message_add_tail(t,m);
 }
