@@ -114,19 +114,18 @@ static int imx_wm8974_probe(struct platform_device *pdev)
 	int ret;
 
 	ssi_np = of_parse_phandle(pdev->dev.of_node, "audio-cpu", 0);
-	if (strstr(ssi_np->name, "ssi")) {
-		ret = ssi_audmux_config(pdev); /* required for imx6 ssi */
-		if (ret) {
-			dev_err(&pdev->dev, "fail to configure ssi audmux\n");
-			goto fail;
-		}
-	}
-
 	codec_np = of_parse_phandle(pdev->dev.of_node, "audio-codec", 0);
 	if (!ssi_np || !codec_np) {
 		dev_err(&pdev->dev, "phandle missing or invalid\n");
 		ret = -EINVAL;
 		goto fail;
+	}
+	if (ssi_np && strstr(ssi_np->name, "ssi")) {
+		ret = ssi_audmux_config(pdev); /* required for imx6 ssi */
+		if (ret) {
+			dev_err(&pdev->dev, "fail to configure ssi audmux\n");
+			goto fail;
+		}
 	}
 
 	ssi_pdev = of_find_device_by_node(ssi_np);
