@@ -1,0 +1,68 @@
+config LRDMWL
+	tristate "Laird Connectivity wireless support based on Marvell 8997 chipset (mac80211 compatible)"
+	depends on MAC80211
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl.
+
+config LRDMWL_PCIE
+	tristate "Laird wireless support based on Marvell chipsets for PCIE"
+	depends on LRDMWL && PCI
+	select FW_LOADER
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module for PCIE
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl_pcie.
+
+config LRDMWL_SDIO
+	tristate "Laird wireless support based on Marvell chipsets for SDIO"
+	depends on LRDMWL && MMC
+	select FW_LOADER
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module for SDIO
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl_sdio.
+
+config LRDMWL_USB
+	tristate "Laird wireless support based on Marvell chipsets for USB"
+	depends on LRDMWL
+	select FW_LOADER
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module for USB
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl_usb.
+
+config LRDMWL_FIPS
+	bool "Laird wireless FIPS support for SOM60"
+	depends on LRDMWL
+	help
+		Enables FIPS operation for SOM60

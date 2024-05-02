@@ -2053,6 +2053,10 @@ static u32 ieee80211_handle_pwr_constr(struct ieee80211_link_data *link,
 	int chan_pwr = 0, pwr_reduction_80211h = 0;
 	int pwr_level_cisco, pwr_level_80211h;
 	int new_ap_level;
+#ifndef _REMOVE_LAIRD_MODS_
+	// BZ12222: process 802.11d/h even if SM/RM capabilities are not set
+	if (country_ie) {
+#else
 	__le16 capab = mgmt->u.probe_resp.capab_info;
 
 	if (ieee80211_is_s1g_beacon(mgmt->frame_control))
@@ -2061,12 +2065,21 @@ static u32 ieee80211_handle_pwr_constr(struct ieee80211_link_data *link,
 	if (country_ie &&
 	    (capab & cpu_to_le16(WLAN_CAPABILITY_SPECTRUM_MGMT) ||
 	     capab & cpu_to_le16(WLAN_CAPABILITY_RADIO_MEASURE))) {
+#endif
 		has_80211h_pwr = ieee80211_find_80211h_pwr_constr(
 			sdata, channel, country_ie, country_ie_len,
 			pwr_constr_ie, &chan_pwr, &pwr_reduction_80211h);
 		pwr_level_80211h =
 			max_t(int, 0, chan_pwr - pwr_reduction_80211h);
 	}
+
+#ifndef _REMOVE_LAIRD_MODS_
+	// BZ12222: 802.11h TPC (pwr_constr_ie) takes precedence over Cisco TPC
+	if (has_80211h_pwr && pwr_constr_ie)
+		; // do not process cisco_dtpc_ie
+	else
+		// fall through to process cisco_dtpc_ie
+#endif
 
 	if (cisco_dtpc_ie) {
 		ieee80211_find_cisco_dtpc(
@@ -2075,7 +2088,13 @@ static u32 ieee80211_handle_pwr_constr(struct ieee80211_link_data *link,
 	}
 
 	if (!has_80211h_pwr && !has_cisco_pwr)
+#ifndef _REMOVE_LAIRD_MODS_
+		// BZ1222: TPC elements removed, restore original power level
+		new_ap_level = IEEE80211_UNSET_POWER_LEVEL;
+	else
+#else
 		return 0;
+#endif
 
 	/* If we have both 802.11h and Cisco DTPC, apply both limits
 	 * by picking the smallest of the two power levels advertised.
@@ -6428,6 +6447,16 @@ static int ieee80211_prep_connection(struct ieee80211_sub_if_data *sdata,
 	bool have_sta = false;
 	bool mlo;
 	int err;
+
+#ifndef _REMOVE_LAIRD_MODS_
+	if (sdata->vif.type == NL80211_IFTYPE_STATION) {
+		/* new connection, reset DMS state */
+		/* TBD: add a command to enable DMS */
+		/* for now, just enable, and auto-detect DMS usage */
+		memset(&sdata->u.mgd.dms, 0, sizeof(sdata->u.mgd.dms));
+		sdata->u.mgd.dms.enabled = 1;
+	}
+#endif
 
 	if (link_id >= 0) {
 		mlo = true;
