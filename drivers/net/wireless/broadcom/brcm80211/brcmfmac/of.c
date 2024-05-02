@@ -74,13 +74,13 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	int irq;
 	int err;
 	u32 irqf;
-	u32 val;
+	u32 val32;
+	u16 val16;
 
 	/* Apple ARM64 platforms have their own idea of board type, passed in
 	 * via the device tree. They also have an antenna SKU parameter
 	 */
-	err = of_property_read_string(np, "brcm,board-type", &prop);
-	if (!err)
+	if (!of_property_read_string(np, "brcm,board-type", &prop))
 		settings->board_type = prop;
 
 	if (!of_property_read_string(np, "apple,antenna-sku", &prop))
@@ -88,7 +88,7 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 
 	/* Set board-type to the first string of the machine compatible prop */
 	root = of_find_node_by_path("/");
-	if (root && err) {
+	if (root && !settings->board_type) {
 		char *board_type;
 		const char *tmp;
 
@@ -118,8 +118,15 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	if (bus_type != BRCMF_BUSTYPE_SDIO)
 		return;
 
-	if (of_property_read_u32(np, "brcm,drive-strength", &val) == 0)
-		sdio->drive_strength = val;
+	if (of_property_read_u32(np, "brcm,drive-strength", &val32) == 0)
+		sdio->drive_strength = val32;
+
+	sdio->broken_sg_support = of_property_read_bool(np,
+			"brcm,broken_sg_support");
+	if (of_property_read_u16(np, "brcm,sd_head_align", &val16) == 0)
+		sdio->sd_head_align = val16;
+	if (of_property_read_u16(np, "brcm,sd_sgentry_align", &val16) == 0)
+		sdio->sd_sgentry_align = val16;
 
 	/* make sure there are interrupts defined in the node */
 	if (!of_find_property(np, "interrupts", NULL))
