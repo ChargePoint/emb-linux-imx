@@ -4480,7 +4480,8 @@ fec_probe(struct platform_device *pdev)
 
 	/* Carrier starts down, phylib will bring it up */
 	netif_carrier_off(ndev);
-	fec_enet_clk_enable(ndev, false);
+	/* phy probe fails if enet clk is disabed while phy is in init phase */
+	/* fec_enet_clk_enable(ndev, false); */
 	pinctrl_pm_select_sleep_state(&pdev->dev);
 
 	ndev->max_mtu = PKT_MAXBUF_SIZE - ETH_HLEN - ETH_FCS_LEN;
