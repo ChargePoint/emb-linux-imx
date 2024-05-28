@@ -373,6 +373,7 @@ static int realtek_smi_setup_mdio(struct dsa_switch *ds)
 	struct device_node *mdio_np;
 	int ret;
 
+	dev_err(priv->dev, "****************8realtek_smi_setup_mdio\n");
 	mdio_np = of_get_compatible_child(priv->dev->of_node, "realtek,smi-mdio");
 	if (!mdio_np) {
 		dev_err(priv->dev, "no MDIO bus node\n");

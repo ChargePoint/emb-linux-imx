@@ -149,6 +149,10 @@ int enetc_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 		dev_dbg(&bus->dev,
 			"Error while reading PHY%d reg at %d.%d\n",
 			phy_id, dev_addr, regnum);
+		dev_err(&bus->dev,
+			"Error while reading PHY%d reg at %d.%hhu\n",
+			phy_id, dev_addr, regnum);
+
 		return 0xffff;
 	}
 

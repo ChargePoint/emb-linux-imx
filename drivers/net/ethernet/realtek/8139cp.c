@@ -434,7 +434,7 @@ static inline void cp_rx_skb (struct cp_private *cp, struct sk_buff *skb,
 static void cp_rx_err_acct (struct cp_private *cp, unsigned rx_tail,
 			    u32 status, u32 len)
 {
-	netif_dbg(cp, rx_err, cp->dev, "rx err, slot %d status 0x%x len %d\n",
+	netif_err(cp, rx_err, cp->dev, "rx err, slot %d status 0x%x len %d\n",
 		  rx_tail, status, len);
 	cp->dev->stats.rx_errors++;
 	if (status & RxErrFrame)
@@ -504,7 +504,7 @@ static int cp_rx_poll(struct napi_struct *napi, int budget)
 			goto rx_next;
 		}
 
-		netif_dbg(cp, rx_status, dev, "rx slot %d status 0x%x len %d\n",
+		netif_err(cp, rx_status, dev, "rx slot %d status 0x%x len %d\n",
 			  rx_tail, status, len);
 
 		new_skb = napi_alloc_skb(napi, buflen);
@@ -589,7 +589,7 @@ static irqreturn_t cp_interrupt (int irq, void *dev_instance)
 
 	handled = 1;
 
-	netif_dbg(cp, intr, dev, "intr, status %04x cmd %02x cpcmd %04x\n",
+	netif_err(cp, intr, dev, "intr, status %04x cmd %02x cpcmd %04x\n",
 		  status, cpr8(Cmd), cpr16(CpCmd));
 
 	cpw16(IntrStatus, status & ~cp_rx_intr_mask);
@@ -670,7 +670,7 @@ static void cp_tx (struct cp_private *cp)
 
 		if (status & LastFrag) {
 			if (status & (TxError | TxFIFOUnder)) {
-				netif_dbg(cp, tx_err, cp->dev,
+				netif_err(cp, tx_err, cp->dev,
 					  "tx err, status 0x%x\n", status);
 				cp->dev->stats.tx_errors++;
 				if (status & TxOWC)
@@ -686,7 +686,7 @@ static void cp_tx (struct cp_private *cp)
 					((status >> TxColCntShift) & TxColCntMask);
 				cp->dev->stats.tx_packets++;
 				cp->dev->stats.tx_bytes += skb->len;
-				netif_dbg(cp, tx_done, cp->dev,
+				netif_err(cp, tx_done, cp->dev,
 					  "tx done, slot %d\n", tx_tail);
 			}
 			bytes_compl += skb->len;
@@ -796,7 +796,7 @@ static netdev_tx_t cp_start_xmit (struct sk_buff *skb,
 
 		cp->tx_skb[entry] = skb;
 		cp->tx_opts[entry] = opts1;
-		netif_dbg(cp, tx_queued, cp->dev, "tx queued, slot %d, skblen %d\n",
+		netif_err(cp, tx_queued, cp->dev, "tx queued, slot %d, skblen %d\n",
 			  entry, skb->len);
 	} else {
 		struct cp_desc *txd;
@@ -861,7 +861,7 @@ static netdev_tx_t cp_start_xmit (struct sk_buff *skb,
 		wmb();
 
 		cp->tx_opts[first_entry] = ctrl;
-		netif_dbg(cp, tx_queued, cp->dev, "tx queued, slots %d-%d, skblen %d\n",
+		netif_err(cp, tx_queued, cp->dev, "tx queued, slots %d-%d, skblen %d\n",
 			  first_entry, entry, skb->len);
 	}
 	cp->tx_head = NEXT_TX(entry);
@@ -1182,7 +1182,7 @@ static int cp_open (struct net_device *dev)
 	const int irq = cp->pdev->irq;
 	int rc;
 
-	netif_dbg(cp, ifup, dev, "enabling interface\n");
+	netif_err(cp, ifup, dev, "enabling interface\n");
 
 	rc = cp_alloc_rings(cp);
 	if (rc)
@@ -1218,7 +1218,7 @@ static int cp_close (struct net_device *dev)
 
 	napi_disable(&cp->napi);
 
-	netif_dbg(cp, ifdown, dev, "disabling interface\n");
+	netif_err(cp, ifdown, dev, "disabling interface\n");
 
 	spin_lock_irqsave(&cp->lock, flags);
 
@@ -1247,10 +1247,10 @@ static void cp_tx_timeout(struct net_device *dev, unsigned int txqueue)
 
 	spin_lock_irqsave(&cp->lock, flags);
 
-	netif_dbg(cp, tx_err, cp->dev, "TX ring head %d tail %d desc %x\n",
+	netif_err(cp, tx_err, cp->dev, "TX ring head %d tail %d desc %x\n",
 		  cp->tx_head, cp->tx_tail, cpr16(TxDmaOkLowDesc));
 	for (i = 0; i < CP_TX_RING_SIZE; i++) {
-		netif_dbg(cp, tx_err, cp->dev,
+		netif_err(cp, tx_err, cp->dev,
 			  "TX slot %d @%p: %08x (%08x) %08x %llx %p\n",
 			  i, &cp->tx_ring[i], le32_to_cpu(cp->tx_ring[i].opts1),
 			  cp->tx_opts[i], le32_to_cpu(cp->tx_ring[i].opts2),

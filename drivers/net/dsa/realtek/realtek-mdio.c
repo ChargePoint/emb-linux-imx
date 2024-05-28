@@ -45,6 +45,7 @@ static int realtek_mdio_write(void *ctx, u32 reg, u32 val)
 	struct mii_bus *bus = priv->bus;
 	int ret;
 
+
 	mutex_lock(&bus->mdio_lock);
 
 	ret = bus->write(bus, priv->mdio_addr, REALTEK_MDIO_CTRL0_REG, REALTEK_MDIO_ADDR_OP);
@@ -197,20 +198,23 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 	/* TODO: if power is software controlled, set up any regulators here */
 	priv->leds_disabled = of_property_read_bool(np, "realtek,disable-leds");
 
-	priv->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
+	dev_err(dev, " devm_gpiod_get_optional\n");
+	/*priv->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(priv->reset)) {
 		dev_err(dev, "failed to get RESET GPIO\n");
 		return PTR_ERR(priv->reset);
-	}
+	}*/
 
+	priv->reset= NULL;
 	if (priv->reset) {
 		gpiod_set_value(priv->reset, 1);
-		dev_dbg(dev, "asserted RESET\n");
+		dev_err(dev, "asserted RESET\n");
 		msleep(REALTEK_HW_STOP_DELAY);
 		gpiod_set_value(priv->reset, 0);
 		msleep(REALTEK_HW_START_DELAY);
-		dev_dbg(dev, "deasserted RESET\n");
+		dev_err(dev, "deasserted RESET\n");
 	}
+	dev_err(dev, "RESET done\n");
 
 	ret = priv->ops->detect(priv);
 	if (ret) {
@@ -218,6 +222,7 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 		return ret;
 	}
 
+	dev_err(dev, " detect switch\n");
 	priv->ds = devm_kzalloc(dev, sizeof(*priv->ds), GFP_KERNEL);
 	if (!priv->ds)
 		return -ENOMEM;
@@ -227,11 +232,13 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 	priv->ds->priv = priv;
 	priv->ds->ops = var->ds_ops_mdio;
 
+	dev_err(dev, "before  dsa_register_switch\n");
 	ret = dsa_register_switch(priv->ds);
 	if (ret) {
 		dev_err(priv->dev, "unable to register switch ret = %d\n", ret);
 		return ret;
 	}
+	dev_err(priv->dev, "register switch ret = %d\n", ret);
 
 	return 0;
 }
@@ -268,6 +275,10 @@ static const struct of_device_id realtek_mdio_of_match[] = {
 #endif
 #if IS_ENABLED(CONFIG_NET_DSA_REALTEK_RTL8365MB)
 	{ .compatible = "realtek,rtl8365mb", .data = &rtl8365mb_variant, },
+#endif
+// 加入rtl8370mb JimmyLiu
+#if IS_ENABLED(CONFIG_NET_DSA_REALTEK_RTL8370MB)
+	{ .compatible = "realtek,rtl8370mb", .data = &rtl8370mb_variant, },
 #endif
 	{ /* sentinel */ },
 };

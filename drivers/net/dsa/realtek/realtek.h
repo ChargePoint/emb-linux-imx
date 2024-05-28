@@ -12,6 +12,11 @@
 #include <linux/platform_device.h>
 #include <linux/gpio/consumer.h>
 #include <net/dsa.h>
+#include "rtk_switch.h"
+#include "rtk_types.h"
+#include "rtk_error.h"
+#include "port.h"
+#include "led.h"
 
 #define REALTEK_HW_STOP_DELAY		25	/* msecs */
 #define REALTEK_HW_START_DELAY		100	/* msecs */
@@ -146,5 +151,9 @@ void rtl8366_get_ethtool_stats(struct dsa_switch *ds, int port, uint64_t *data);
 
 extern const struct realtek_variant rtl8366rb_variant;
 extern const struct realtek_variant rtl8365mb_variant;
+extern const struct realtek_variant rtl8370mb_variant;
+
+
+
 
 #endif /*  _REALTEK_H */

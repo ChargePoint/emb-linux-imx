@@ -242,13 +242,13 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	/* Return all Fs if nothing was there */
 	if ((xgmac_read32(&regs->mdio_stat, endian) & MDIO_STAT_RD_ER) &&
 	    !priv->has_a011043) {
-		dev_dbg(&bus->dev,
-			"Error while reading PHY%d reg at %d.%d\n",
+		dev_err(&bus->dev,
+			"Error while reading PHY%d reg at %d.%hhu\n",
 			phy_id, dev_addr, regnum);
 		ret = 0xffff;
 	} else {
 		ret = xgmac_read32(&regs->mdio_data, endian) & 0xffff;
-		dev_dbg(&bus->dev, "read %04x\n", ret);
+		dev_err(&bus->dev, "read %04x\n", ret);
 	}
 
 irq_restore:

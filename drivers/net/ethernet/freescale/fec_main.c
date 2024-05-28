@@ -894,6 +894,7 @@ fec_enet_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	struct netdev_queue *nq;
 	int ret;
 
+	netdev_err(ndev, "fec_enet_start_xmit: Transmitting packet on %s\n", ndev->name);
 	queue = skb_get_queue_mapping(skb);
 	txq = fep->tx_queue[queue];
 	nq = netdev_get_tx_queue(ndev, queue);
@@ -1846,6 +1847,8 @@ fec_enet_interrupt(int irq, void *dev_id)
 	struct net_device *ndev = dev_id;
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	irqreturn_t ret = IRQ_NONE;
+
+	netdev_err(ndev, "fec_enet_interrupt: Interrupt received on %s\n", ndev->name);
 
 	if (fec_enet_collect_events(fep) && fep->link) {
 		ret = IRQ_HANDLED;
@@ -4232,8 +4235,8 @@ static int fec_enet_init_stop_mode(struct fec_enet_private *fep,
 	ret = of_property_read_u32_array(np, "fsl,stop-mode", out_val,
 					 ARRAY_SIZE(out_val));
 	if (ret) {
-		dev_dbg(&fep->pdev->dev, "no stop mode property\n");
-		goto out;
+		dev_err(&fep->pdev->dev, "no stop mode property\n");
+		return ret;
 	}
 
 	fep->stop_gpr.gpr = syscon_node_to_regmap(gpr_np);

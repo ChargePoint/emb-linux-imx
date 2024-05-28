@@ -592,6 +592,8 @@ int generic_mii_ioctl(struct mii_if_info *mii_if,
 	mii_data->phy_id &= mii_if->phy_id_mask;
 	mii_data->reg_num &= mii_if->reg_num_mask;
 
+	netdev_err(mii_if->dev, "**********generic_mii_ioctl () cmd %d\n",cmd);
+
 	switch(cmd) {
 	case SIOCGMIIPHY:
 		mii_data->phy_id = mii_if->phy_id;

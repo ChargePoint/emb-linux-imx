@@ -123,7 +123,7 @@ static int dnet_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 
 	value = dnet_readw_mac(bp, DNET_INTERNAL_GMII_MNG_DAT_REG);
 
-	pr_debug("mdio_read %02x:%02x <- %04x\n", mii_id, regnum, value);
+	pr_err("mdio_read %02x:%02x <- %04x\n", mii_id, regnum, value);
 
 	return value;
 }
@@ -134,7 +134,7 @@ static int dnet_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
 	struct dnet *bp = bus->priv;
 	u16 tmp;
 
-	pr_debug("mdio_write %02x:%02x <- %04x\n", mii_id, regnum, value);
+	pr_err("mdio_write %02x:%02x <- %04x\n", mii_id, regnum, value);
 
 	while (!(dnet_readw_mac(bp, DNET_INTERNAL_GMII_MNG_CTL_REG)
 				& DNET_INTERNAL_GMII_MNG_CMD_FIN))
@@ -483,7 +483,7 @@ static irqreturn_t dnet_interrupt(int irq, void *dev_id)
 	}
 
 	if (!handled)
-		pr_debug("%s: irq %x remains\n", __func__, int_current);
+		pr_err("%s: irq %x remains\n", __func__, int_current);
 
 	spin_unlock_irqrestore(&bp->lock, flags);
 
@@ -514,7 +514,7 @@ static netdev_tx_t dnet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	dnet_readl(bp, TX_STATUS);
 
-	pr_debug("start_xmit: len %u head %p data %p\n",
+	pr_err("start_xmit: len %u head %p data %p\n",
 	       skb->len, skb->head, skb->data);
 	dnet_print_skb(skb);
 

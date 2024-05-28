@@ -21,6 +21,7 @@ config NET_DSA_REALTEK_MDIO
 	depends on NET_DSA_REALTEK_RTL8365MB || NET_DSA_REALTEK_RTL8366RB
 	depends on NET_DSA_REALTEK_RTL8365MB || !NET_DSA_REALTEK_RTL8365MB
 	depends on NET_DSA_REALTEK_RTL8366RB || !NET_DSA_REALTEK_RTL8366RB
+	depends on NET_DSA_REALTEK_RTL8370MB || !NET_DSA_REALTEK_RTL8370MB
 	help
 	  Select to enable support for registering switches configured
 	  through MDIO.
@@ -31,6 +32,7 @@ config NET_DSA_REALTEK_SMI
 	depends on NET_DSA_REALTEK_RTL8365MB || NET_DSA_REALTEK_RTL8366RB
 	depends on NET_DSA_REALTEK_RTL8365MB || !NET_DSA_REALTEK_RTL8365MB
 	depends on NET_DSA_REALTEK_RTL8366RB || !NET_DSA_REALTEK_RTL8366RB
+	depends on NET_DSA_REALTEK_RTL8370MB || !NET_DSA_REALTEK_RTL8370MB
 	help
 	  Select to enable support for registering switches connected
 	  through SMI.
@@ -50,5 +52,30 @@ config NET_DSA_REALTEK_RTL8366RB
 	select NET_DSA_TAG_RTL4_A
 	help
 	  Select to enable support for Realtek RTL8366RB.
+
+config NET_DSA_REALTEK_RTL8370MB
+	tristate "Realtek RTL8370MB switch subdriver"
+	imply NET_DSA_REALTEK_SMI
+	imply NET_DSA_REALTEK_MDIO
+	select NET_DSA_TAG_RTL8_4
+	select DAL_RTL8367C
+	help
+	  Select to enable support for Realtek RTL8370MB.
+
+if NET_DSA_REALTEK_RTL8370MB
+config NET_DSA_REALTEK_RTL_API
+    bool "Realtek Unmanaged Switch API"
+	default y
+	depends on NET_DSA_REALTEK_RTL8370MB
+	help
+	  Select to enable support for Realtek Unmanaged Switch API.
+
+config DAL_RTL8367C
+    bool "Realtek DAL RTL8367C family"
+	default y
+	depends on NET_DSA_REALTEK_RTL8370MB
+	help
+	  Select to enable support for Realtek RTL8370MB.
+endif
 
 endif

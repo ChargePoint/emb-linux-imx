@@ -327,6 +327,7 @@ int phy_mii_ioctl(struct phy_device *phydev, struct ifreq *ifr, int cmd)
 	bool change_autoneg = false;
 	int prtad, devad;
 
+	netdev_err(phydev->attached_dev, "**********phy_mii_ioctl() cmd %d\n",cmd);
 	switch (cmd) {
 	case SIOCGMIIPHY:
 		mii_data->phy_id = phydev->mdio.addr;

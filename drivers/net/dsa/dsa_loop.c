@@ -94,6 +94,7 @@ static int dsa_loop_setup(struct dsa_switch *ds)
 		       sizeof(dsa_loop_mibs));
 
 	dev_dbg(ds->dev, "%s\n", __func__);
+	dev_err(ds->dev, "**************%s\n", __func__);
 
 	return dsa_loop_setup_devlink_resources(ds);
 }
@@ -141,6 +142,7 @@ static int dsa_loop_phy_read(struct dsa_switch *ds, int port, int regnum)
 	struct mii_bus *bus = ps->bus;
 	int ret;
 
+	dev_err(ds->dev, "************`%s\n", __func__);
 	ret = mdiobus_read_nested(bus, ps->port_base + port, regnum);
 	if (ret < 0)
 		ps->ports[port].mib[DSA_LOOP_PHY_READ_ERR].val++;

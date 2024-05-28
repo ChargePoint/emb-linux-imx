@@ -2623,6 +2623,7 @@ static int phylink_phy_read(struct phylink *pl, unsigned int phy_id,
 	struct phy_device *phydev = pl->phydev;
 	int prtad, devad;
 
+	phylink_err(pl,"2***************phylink_phy_read %d %d\n",phy_id,reg);
 	if (mdio_phy_id_is_c45(phy_id)) {
 		prtad = mdio_phy_id_prtad(phy_id);
 		devad = mdio_phy_id_devad(phy_id);
@@ -2636,6 +2637,7 @@ static int phylink_phy_read(struct phylink *pl, unsigned int phy_id,
 		case MII_BMSR:
 		case MII_PHYSID1:
 		case MII_PHYSID2:
+			phylink_err(pl,"is_c45***************phylink_phy_read %d %d\n",phy_id,reg);
 			devad = __ffs(phydev->c45_ids.mmds_present);
 			break;
 		case MII_ADVERTISE:
@@ -2706,6 +2708,7 @@ static int phylink_mii_read(struct phylink *pl, unsigned int phy_id,
 	struct phylink_link_state state;
 	int val = 0xffff;
 
+	phylink_err(pl,"2*************** phylink_mii_read %d\n",reg);
 	switch (pl->cur_link_an_mode) {
 	case MLO_AN_FIXED:
 		if (phy_id == 0) {
@@ -2770,14 +2773,17 @@ int phylink_mii_ioctl(struct phylink *pl, struct ifreq *ifr, int cmd)
 
 	ASSERT_RTNL();
 
+	phylink_err(pl,"*************** phylink_mii_ioctl %d\n",cmd);
 	if (pl->phydev) {
 		/* PHYs only exist for MLO_AN_PHY and SGMII */
 		switch (cmd) {
 		case SIOCGMIIPHY:
+			phylink_err(pl,"*************** phylink_mii_ioctl SIOCGMIIPHY %d\n",cmd);
 			mii->phy_id = pl->phydev->mdio.addr;
 			fallthrough;
 
 		case SIOCGMIIREG:
+			phylink_err(pl,"*************** phylink_mii_ioctl SIOCGMIIREG %d\n",cmd);
 			ret = phylink_phy_read(pl, mii->phy_id, mii->reg_num);
 			if (ret >= 0) {
 				mii->val_out = ret;
@@ -2786,6 +2792,7 @@ int phylink_mii_ioctl(struct phylink *pl, struct ifreq *ifr, int cmd)
 			break;
 
 		case SIOCSMIIREG:
+			phylink_err(pl,"*************** phylink_mii_ioctl SIOCSMIIREG %d\n",cmd);
 			ret = phylink_phy_write(pl, mii->phy_id, mii->reg_num,
 						mii->val_in);
 			break;
@@ -2797,10 +2804,12 @@ int phylink_mii_ioctl(struct phylink *pl, struct ifreq *ifr, int cmd)
 	} else {
 		switch (cmd) {
 		case SIOCGMIIPHY:
+			phylink_err(pl,"2*************** phylink_mii_ioctl SIOCGMIIPHY %d\n",cmd);
 			mii->phy_id = 0;
 			fallthrough;
 
 		case SIOCGMIIREG:
+			phylink_err(pl,"2*************** phylink_mii_ioctl SIOCGMIIREG %d\n",cmd);
 			ret = phylink_mii_read(pl, mii->phy_id, mii->reg_num);
 			if (ret >= 0) {
 				mii->val_out = ret;
@@ -2809,6 +2818,7 @@ int phylink_mii_ioctl(struct phylink *pl, struct ifreq *ifr, int cmd)
 			break;
 
 		case SIOCSMIIREG:
+			phylink_err(pl,"2*************** phylink_mii_ioctl SIOCSMIIREG %d\n",cmd);
 			ret = phylink_mii_write(pl, mii->phy_id, mii->reg_num,
 						mii->val_in);
 			break;

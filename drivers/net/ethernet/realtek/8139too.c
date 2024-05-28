@@ -1355,7 +1355,7 @@ static int rtl8139_open (struct net_device *dev)
 	rtl8139_hw_start (dev);
 	netif_start_queue (dev);
 
-	netif_dbg(tp, ifup, dev,
+	netif_err(tp, ifup, dev,
 		  "%s() ioaddr %#llx IRQ %d GP Pins %02x %s-duplex\n",
 		  __func__,
 		  (unsigned long long)pci_resource_start (tp->pci_dev, 1),
@@ -1752,7 +1752,7 @@ static netdev_tx_t rtl8139_start_xmit (struct sk_buff *skb,
 		netif_stop_queue (dev);
 	spin_unlock_irqrestore(&tp->lock, flags);
 
-	netif_dbg(tp, tx_queued, dev, "Queued Tx packet size %u to slot %d\n",
+	netif_err(tp, tx_queued, dev, "Queued Tx packet size %u to slot %d\n",
 		  len, entry);
 
 	return NETDEV_TX_OK;
@@ -1782,7 +1782,7 @@ static void rtl8139_tx_interrupt (struct net_device *dev,
 		/* Note: TxCarrierLost is always asserted at 100mbps. */
 		if (txstatus & (TxOutOfWindow | TxAborted)) {
 			/* There was an major error, log it. */
-			netif_dbg(tp, tx_err, dev, "Transmit error, Tx status %08x\n",
+			netif_err(tp, tx_err, dev, "Transmit error, Tx status %08x\n",
 				  txstatus);
 			dev->stats.tx_errors++;
 			if (txstatus & TxAborted) {
@@ -1839,7 +1839,7 @@ static void rtl8139_rx_err (u32 rx_status, struct net_device *dev,
 	int tmp_work;
 #endif
 
-	netif_dbg(tp, rx_err, dev, "Ethernet frame had errors, status %08x\n",
+	netif_err(tp, rx_err, dev, "Ethernet frame had errors, status %08x\n",
 		  rx_status);
 	dev->stats.rx_errors++;
 	if (!(rx_status & RxStatusOK)) {
@@ -1974,7 +1974,7 @@ static int rtl8139_rx(struct net_device *dev, struct rtl8139_private *tp,
 		else
 			pkt_size = rx_size;
 
-		netif_dbg(tp, rx_status, dev, "%s() status %04x, size %04x, cur %04x\n",
+		netif_err(tp, rx_status, dev, "%s() status %04x, size %04x, cur %04x\n",
 			  __func__, rx_status, rx_size, cur_rx);
 #if RTL8139_DEBUG > 2
 		print_hex_dump(KERN_DEBUG, "Frame contents: ",
@@ -1994,7 +1994,7 @@ static int rtl8139_rx(struct net_device *dev, struct rtl8139_private *tp,
 				rx_size = 0;
 				goto no_early_rx;
 			}
-			netif_dbg(tp, intr, dev, "fifo copy in progress\n");
+			netif_err(tp, intr, dev, "fifo copy in progress\n");
 			tp->xstats.early_rx++;
 			break;
 		}
@@ -2262,7 +2262,7 @@ static int rtl8139_close (struct net_device *dev)
 	netif_stop_queue(dev);
 	napi_disable(&tp->napi);
 
-	netif_dbg(tp, ifdown, dev, "Shutting down ethercard, status was 0x%04x\n",
+	netif_err(tp, ifdown, dev, "Shutting down ethercard, status was 0x%04x\n",
 		  RTL_R16(IntrStatus));
 
 	spin_lock_irqsave (&tp->lock, flags);

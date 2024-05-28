@@ -154,7 +154,7 @@ static int fsl_pq_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 	/* Grab the value of the register from miimstat */
 	value = ioread32be(&regs->miimstat);
 
-	dev_dbg(&bus->dev, "read %04x from address %x/%x\n", value, mii_id, regnum);
+	dev_err(&bus->dev, "read %04x from address %x/%x\n", value, mii_id, regnum);
 	return value;
 }
 
@@ -262,7 +262,7 @@ static void ucc_configure(phys_addr_t start, phys_addr_t end)
 
 		ret = of_address_to_resource(np, 0, &res);
 		if (ret < 0) {
-			pr_debug("fsl-pq-mdio: no address range in node %pOF\n",
+			pr_error("fsl-pq-mdio: no address range in node %pOF\n",
 				 np);
 			continue;
 		}
@@ -275,7 +275,7 @@ static void ucc_configure(phys_addr_t start, phys_addr_t end)
 		if (!iprop) {
 			iprop = of_get_property(np, "device-id", NULL);
 			if (!iprop) {
-				pr_debug("fsl-pq-mdio: no UCC ID in node %pOF\n",
+				pr_error("fsl-pq-mdio: no UCC ID in node %pOF\n",
 					 np);
 				continue;
 			}
@@ -288,12 +288,12 @@ static void ucc_configure(phys_addr_t start, phys_addr_t end)
 		 * numbered from 1, not 0.
 		 */
 		if (ucc_set_qe_mux_mii_mng(id - 1) < 0) {
-			pr_debug("fsl-pq-mdio: invalid UCC ID in node %pOF\n",
+			pr_error("fsl-pq-mdio: invalid UCC ID in node %pOF\n",
 				 np);
 			continue;
 		}
 
-		pr_debug("fsl-pq-mdio: setting node UCC%u to MII master\n", id);
+		pr_error("fsl-pq-mdio: setting node UCC%u to MII master\n", id);
 		found_mii_master = true;
 	}
 }
@@ -423,7 +423,7 @@ static int fsl_pq_mdio_probe(struct platform_device *pdev)
 
 	data = id->data;
 
-	dev_dbg(&pdev->dev, "found %s compatible node\n", id->compatible);
+	dev_err(&pdev->dev, "found %s compatible node\n", id->compatible);
 
 	new_bus = mdiobus_alloc_size(sizeof(*priv));
 	if (!new_bus)
@@ -469,7 +469,7 @@ static int fsl_pq_mdio_probe(struct platform_device *pdev)
 	if (data->get_tbipa) {
 		for_each_child_of_node(np, tbi) {
 			if (of_node_is_type(tbi, "tbi-phy")) {
-				dev_dbg(&pdev->dev, "found TBI PHY node %pOFP\n",
+				dev_err(&pdev->dev, "found TBI PHY node %pOFP\n",
 					tbi);
 				break;
 			}
