@@ -1035,12 +1035,19 @@ int cfg80211_change_iface(struct cfg80211_registered_device *rdev,
 		return -EOPNOTSUPP;
 
 	if (ntype != otype) {
+#ifndef _REMOVE_LAIRD_MODS_
+		/* if it's part of a bridge, reject changing type to ibss */
+		if (netif_is_bridge_port(dev) &&
+		     ntype == NL80211_IFTYPE_P2P_CLIENT)
+			return -EBUSY;
+#else
 		/* if it's part of a bridge, reject changing type to station/ibss */
 		if (netif_is_bridge_port(dev) &&
 		    (ntype == NL80211_IFTYPE_ADHOC ||
 		     ntype == NL80211_IFTYPE_STATION ||
 		     ntype == NL80211_IFTYPE_P2P_CLIENT))
 			return -EBUSY;
+#endif
 
 		dev->ieee80211_ptr->use_4addr = false;
 		wdev_lock(dev->ieee80211_ptr);
@@ -1091,15 +1098,20 @@ int cfg80211_change_iface(struct cfg80211_registered_device *rdev,
 	if (!err) {
 		dev->priv_flags &= ~IFF_DONT_BRIDGE;
 		switch (ntype) {
+#ifdef _REMOVE_LAIRD_MODS_
 		case NL80211_IFTYPE_STATION:
 			if (dev->ieee80211_ptr->use_4addr)
 				break;
 			fallthrough;
+#endif
 		case NL80211_IFTYPE_OCB:
 		case NL80211_IFTYPE_P2P_CLIENT:
 		case NL80211_IFTYPE_ADHOC:
 			dev->priv_flags |= IFF_DONT_BRIDGE;
 			break;
+#ifndef _REMOVE_LAIRD_MODS_
+		case NL80211_IFTYPE_STATION:
+#endif
 		case NL80211_IFTYPE_P2P_GO:
 		case NL80211_IFTYPE_AP:
 		case NL80211_IFTYPE_AP_VLAN:

@@ -37,10 +37,16 @@ extern struct brcmf_mp_global_t brcmf_mp_global;
  * @feature_disable: Feature_disable bitmask.
  * @fcmode: FWS flow control.
  * @roamoff: Firmware roaming off?
+ * @eap_restrict: Not allow data tx/rx until 802.1X auth succeeds
+ * @default_pm: default power management (PM) mode.
  * @ignore_probe_fail: Ignore probe failure.
  * @trivial_ccode_map: Assume firmware uses ISO3166 country codes with rev 0
+ * @fw_ap_select: Allow FW to select AP.
+ * @disable_6ghz: Disable 6GHz operation
+ * @sdio_in_isr: Handle SDIO DPC in ISR.
  * @country_codes: If available, pointer to struct for translating country codes
  * @bus: Bus specific platform data. Only SDIO at the mmoment.
+ * @pkt_prio: Support customer dscp to WMM up mapping.
  */
 struct brcmf_mp_device {
 	bool		p2p_enable;
@@ -48,8 +54,14 @@ struct brcmf_mp_device {
 	int		fcmode;
 	bool		roamoff;
 	bool		iapp;
+	bool		eap_restrict;
+	int		default_pm;
 	bool		ignore_probe_fail;
 	bool		trivial_ccode_map;
+	bool		fw_ap_select;
+	bool		disable_6ghz;
+	bool		sdio_in_isr;
+	bool		sdio_rxf_in_kthread_enabled;
 	struct brcmfmac_pd_cc *country_codes;
 	const char	*board_type;
 	unsigned char	mac[ETH_ALEN];
@@ -57,6 +69,7 @@ struct brcmf_mp_device {
 	union {
 		struct brcmfmac_sdio_pd sdio;
 	} bus;
+	bool		pkt_prio;
 };
 
 void brcmf_c_set_joinpref_default(struct brcmf_if *ifp);
