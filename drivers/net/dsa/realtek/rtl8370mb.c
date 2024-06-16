@@ -100,15 +100,19 @@
 #include <linux/if_bridge.h>
 
 #include "realtek.h"
+#include "vlan.h"
+#include "cpu.h"
+#include "l2.h"
 
 static int initial_LED(void);
 
+#define USE_REALTEK_API 1
 
 /* Family-specific data and limits */
 #define RTL8365MB_PHYADDRMAX		7
 #define RTL8365MB_NUM_PHYREGS		32
 #define RTL8365MB_PHYREGMAX		(RTL8365MB_NUM_PHYREGS - 1)
-#define RTL8365MB_MAX_NUM_PORTS		11
+#define RTL8365MB_MAX_NUM_PORTS		18
 #define RTL8365MB_MAX_NUM_EXTINTS	3
 #define RTL8365MB_LEARN_LIMIT_MAX	2112
 
@@ -374,6 +378,22 @@ enum rtl8370mb_mib_counter_index {
 	RTL8365MB_MIB_END,
 };
 
+//rtl8370mb_port and port_number mapping table
+static int p_num[RTL8365MB_MAX_NUM_PORTS] = {0};
+
+//
+static int look_for_rtl8370mb_port_array_index(int target) {
+    int size = sizeof(p_num) / sizeof(p_num[0]); 
+    int index = -1;
+    for (int i = 0; i < size; i++) {
+        if (p_num[i] == target) {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+
 struct rtl8370mb_mib_counter {
 	u32 offset;
 	u32 length;
@@ -511,14 +531,14 @@ struct rtl8370mb_chip_info {
 	const char *name;
 	u32 chip_id;
 	u32 chip_ver;
-	const struct rtl8370mb_extint extints[RTL8365MB_MAX_NUM_EXTINTS];
+	struct rtl8370mb_extint extints[RTL8365MB_MAX_NUM_EXTINTS];
 	const struct rtl8370mb_jam_tbl_entry *jam_table;
 	size_t jam_size;
 };
 
 /* Chip info for each supported switch in the family */
 #define PHY_INTF(_mode) (RTL8365MB_PHY_INTERFACE_MODE_ ## _mode)
-static const struct rtl8370mb_chip_info rtl8370mb_chip_infos[] = {
+static struct rtl8370mb_chip_info rtl8370mb_chip_infos[] = {
     {
 		.name = "RTL8370MB",
 		.chip_id = 0x6368,
@@ -529,8 +549,8 @@ static const struct rtl8370mb_chip_info rtl8370mb_chip_infos[] = {
 			{ 9, 2, PHY_INTF(MII) | PHY_INTF(TMII) |
 				PHY_INTF(RMII) | PHY_INTF(RGMII) },
 		},
-		.jam_table = rtl8370mb_init_jam_8365mb_vc,
-		.jam_size = ARRAY_SIZE(rtl8370mb_init_jam_8365mb_vc),
+		// .jam_table = rtl8370mb_init_jam_8365mb_vc,
+		// .jam_size = ARRAY_SIZE(rtl8370mb_init_jam_8365mb_vc),
 	},
 };
 
@@ -628,7 +648,7 @@ static struct realtek_priv *g_priv;
 static void set_global_priv(struct realtek_priv *priv) {
     g_priv = priv;
 }
-
+static uint8_t g_print_flag=0;
 // replace rtl8367c_smi
 rtk_int32 rtl8367c_smi_read(rtk_uint32 mAddrs, rtk_uint32 *rData)
 {
@@ -638,21 +658,23 @@ rtk_int32 rtl8367c_smi_read(rtk_uint32 mAddrs, rtk_uint32 *rData)
     rtk_uint32 ret = RT_ERR_OK;
     ret = regmap_read(priv->map_nolock, mAddrs, &val);
     *rData = val & 0xFFFF;
-    //dev_info(priv->dev, "smi_r: 0x%X, d: 0x%X\n", mAddrs, val);
+	if(g_print_flag)
+    	dev_info(priv->dev, "smi_r: 0x%X, d: 0x%X\n", mAddrs, val);
     return ret;
 }
-EXPORT_SYMBOL_GPL(rtl8367c_smi_read);
 
 // replace rtl8367c_smi
 rtk_int32 rtl8367c_smi_write(rtk_uint32 mAddrs, rtk_uint32 rData)
 {
     struct realtek_priv *priv = g_priv;
     rtk_uint32 ret = RT_ERR_OK;
-    //dev_info(priv->dev, "smi_w: 0x%X, 0x%X\n", mAddrs, rData);
+	if(g_print_flag)
+    	dev_info(priv->dev, "smi_w: 0x%X, 0x%X\n", mAddrs, rData);
     ret = regmap_write(priv->map_nolock, mAddrs, rData);
+	
+
     return ret;
 }
-EXPORT_SYMBOL_GPL(rtl8367c_smi_write);
 
 static int initial_LED(void)
 {
@@ -879,16 +901,15 @@ static int rtl8370mb_dsa_phy_write(struct dsa_switch *ds, int phy, int regnum,
 	return rtl8370mb_phy_write(ds->priv, phy, regnum, val);
 }
 
-static const struct rtl8370mb_extint *
+static struct rtl8370mb_extint *
 rtl8370mb_get_port_extint(struct realtek_priv *priv, int port)
 {
 	struct rtl8370mb *mb = priv->chip_data;
 	int i;
 
 	for (i = 0; i < RTL8365MB_MAX_NUM_EXTINTS; i++) {
-		const struct rtl8370mb_extint *extint =
+		struct rtl8370mb_extint *extint =
 			&mb->chip_info->extints[i];
-
 		if (!extint->supported_interfaces)
 			continue;
 
@@ -909,7 +930,6 @@ rtl8370mb_get_tag_protocol(struct dsa_switch *ds, int port,
 
 	mb = priv->chip_data;
 	cpu = &mb->cpu;
-
 	if (cpu->position == RTL8365MB_CPU_POS_BEFORE_CRC)
 		return DSA_TAG_PROTO_RTL8_4T;
 
@@ -919,8 +939,9 @@ rtl8370mb_get_tag_protocol(struct dsa_switch *ds, int port,
 static int rtl8370mb_ext_config_rgmii(struct realtek_priv *priv, int port,
 				      phy_interface_t interface)
 {
-	const struct rtl8370mb_extint *extint =
-		rtl8370mb_get_port_extint(priv, port);
+
+	struct rtl8370mb_extint *extint =
+		rtl8370mb_get_port_extint(priv, (int)port);
 	struct device_node *dn;
 	struct dsa_port *dp;
 	int tx_delay = 0;
@@ -930,7 +951,6 @@ static int rtl8370mb_ext_config_rgmii(struct realtek_priv *priv, int port,
 
 	if (!extint)
 		return -ENODEV;
-
 	dp = dsa_to_port(priv->ds, port);
 	dn = dp->dn;
 
@@ -976,29 +996,29 @@ static int rtl8370mb_ext_config_rgmii(struct realtek_priv *priv, int port,
 				 "RGMII RX delay must be 0 to 2.1 ns\n");
 	}
 
-	// ret = regmap_update_bits(
-	// 	priv->map, RTL8365MB_EXT_RGMXF_REG(extint->id),
-	// 	RTL8365MB_EXT_RGMXF_TXDELAY_MASK |
-	// 		RTL8365MB_EXT_RGMXF_RXDELAY_MASK,
-	// 	FIELD_PREP(RTL8365MB_EXT_RGMXF_TXDELAY_MASK, tx_delay) |
-	// 		FIELD_PREP(RTL8365MB_EXT_RGMXF_RXDELAY_MASK, rx_delay));
-	// if (ret)
-	// 	return ret;
-
-	// ret = regmap_update_bits(
-	// 	priv->map, RTL8365MB_DIGITAL_INTERFACE_SELECT_REG(extint->id),
-	// 	RTL8365MB_DIGITAL_INTERFACE_SELECT_MODE_MASK(extint->id),
-	// 	RTL8365MB_EXT_PORT_MODE_RGMII
-	// 		<< RTL8365MB_DIGITAL_INTERFACE_SELECT_MODE_OFFSET(
-	// 			   extint->id));
+#if USE_REALTEK_API == 1
 	dev_info(priv->dev, "rtk_port_rgmiiDelayExt_set tx_delay_val:0x%x ,rx_delay:0x%x\n", tx_delay,rx_delay);
+	dev_info(priv->dev,"rtl8370mb_ext_config_rgmii logicalPort : %d \n", port);
 	mutex_lock(&g_priv->map_lock);
-    //ret = rtk_port_rgmiiDelayExt_set(port+8, 1, 4);
-	ret = rtk_port_rgmiiDelayExt_set(port+8, tx_delay ? 1 : 0, rx_delay);
+	ret = rtk_port_rgmiiDelayExt_set(port, tx_delay, rx_delay);	
 	mutex_unlock(&g_priv->map_lock);
+#else
+	ret = regmap_update_bits(
+		priv->map, RTL8365MB_EXT_RGMXF_REG(extint->id),
+		RTL8365MB_EXT_RGMXF_TXDELAY_MASK |
+			RTL8365MB_EXT_RGMXF_RXDELAY_MASK,
+		FIELD_PREP(RTL8365MB_EXT_RGMXF_TXDELAY_MASK, tx_delay) |
+			FIELD_PREP(RTL8365MB_EXT_RGMXF_RXDELAY_MASK, rx_delay));
+	if (ret)
+		return ret;
 
-    dev_info(priv->dev, "rtk_port_rgmiiDelayExt_set EXT_PORT%d TX delay to 2ns and RX to step 4 : 0x%X\n",port+8-16 , ret);
-
+	ret = regmap_update_bits(
+		priv->map, RTL8365MB_DIGITAL_INTERFACE_SELECT_REG(extint->id),
+		RTL8365MB_DIGITAL_INTERFACE_SELECT_MODE_MASK(extint->id),
+		RTL8365MB_EXT_PORT_MODE_RGMII
+			<< RTL8365MB_DIGITAL_INTERFACE_SELECT_MODE_OFFSET(
+				   extint->id));
+#endif
     if (ret)
 		return ret;
 
@@ -1009,7 +1029,7 @@ static int rtl8370mb_ext_config_forcemode(struct realtek_priv *priv, int port,
 					  bool link, int speed, int duplex,
 					  bool tx_pause, bool rx_pause)
 {
-	const struct rtl8370mb_extint *extint =
+	struct rtl8370mb_extint *extint =
 		rtl8370mb_get_port_extint(priv, port);
 	u32 r_tx_pause;
 	u32 r_rx_pause;
@@ -1018,7 +1038,6 @@ static int rtl8370mb_ext_config_forcemode(struct realtek_priv *priv, int port,
 	u32 r_link;
 	int val;
 	int ret;
-
     rtk_port_mac_ability_t mac_cfg;
     rtk_mode_ext_t rgmii_mode;
 
@@ -1061,36 +1080,36 @@ static int rtl8370mb_ext_config_forcemode(struct realtek_priv *priv, int port,
 		r_duplex = 0;
 	}
 
-	// val = FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_EN_MASK, 1) |
-	//       FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_TXPAUSE_MASK,
-	// 		 r_tx_pause) |
-	//       FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_RXPAUSE_MASK,
-	// 		 r_rx_pause) |
-	//       FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_LINK_MASK, r_link) |
-	//       FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_DUPLEX_MASK,
-	// 		 r_duplex) |
-	//       FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_SPEED_MASK, r_speed);
-	// ret = regmap_write(priv->map,
-	// 		   RTL8365MB_DIGITAL_INTERFACE_FORCE_REG(extint->id),
-	// 		   val);
-    /* eqos */
 
+    /* eqos */
+#if USE_REALTEK_API == 1
     rgmii_mode = MODE_EXT_RGMII;
     mac_cfg.forcemode = PORT_MAC_FORCE;
     mac_cfg.speed = r_speed;
-    mac_cfg.duplex = duplex;
+    mac_cfg.duplex = r_duplex;
     mac_cfg.link = r_link;
     mac_cfg.nway = DISABLED;
     mac_cfg.txpause = r_tx_pause;
     mac_cfg.rxpause = r_rx_pause;
-	dev_info(priv->dev,"MAC Port:%d \n",port);
-	mutex_lock(&g_priv->map_lock);
-    ret = rtk_port_macForceLinkExt_set(port+8, rgmii_mode, &mac_cfg);
-	mutex_unlock(&g_priv->map_lock);
-    dev_info(priv->dev, "rtk_port_macForceLinkExt_set : 0x%X\n", ret);
-
-
-
+	dev_info(priv->dev,"rtl8370mb_ext_config_forcemode logicalPort : %d \n",port);
+	mutex_lock(&priv->map_lock);
+	ret = rtk_port_macForceLinkExt_set(port, rgmii_mode, &mac_cfg);
+	mutex_unlock(&priv->map_lock);
+	dev_info(priv->dev, "rtk_port_macForceLinkExt_set : 0x%X\n", ret);
+#else	
+	val = FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_EN_MASK, 1) |
+	      FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_TXPAUSE_MASK,
+			 r_tx_pause) |
+	      FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_RXPAUSE_MASK,
+			 r_rx_pause) |
+	      FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_LINK_MASK, r_link) |
+	      FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_DUPLEX_MASK,
+			 r_duplex) |
+	      FIELD_PREP(RTL8365MB_DIGITAL_INTERFACE_FORCE_SPEED_MASK, r_speed);
+	ret = regmap_write(priv->map,
+			   RTL8365MB_DIGITAL_INTERFACE_FORCE_REG(extint->id),
+			   val);
+#endif
 	if (ret)
 		return ret;
 
@@ -1100,12 +1119,11 @@ static int rtl8370mb_ext_config_forcemode(struct realtek_priv *priv, int port,
 static void rtl8370mb_phylink_get_caps(struct dsa_switch *ds, int port,
 				       struct phylink_config *config)
 {
-	const struct rtl8370mb_extint *extint =
+	struct realtek_priv *priv = ds->priv;
+	struct rtl8370mb_extint *extint =
 		rtl8370mb_get_port_extint(ds->priv, port);
-
 	config->mac_capabilities = MAC_SYM_PAUSE | MAC_ASYM_PAUSE |
 				   MAC_10 | MAC_100 | MAC_1000FD;
-
 	if (!extint) {
 		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
 			  config->supported_interfaces);
@@ -1133,7 +1151,7 @@ static void rtl8370mb_phylink_mac_config(struct dsa_switch *ds, int port,
 {
 	struct realtek_priv *priv = ds->priv;
 	int ret;
-
+	dev_info(priv->dev, "rtl8370mb_phylink_mac_config logical_Port : %d \n", port);
 	if (mode != MLO_AN_PHY && mode != MLO_AN_FIXED) {
 		dev_err(priv->dev,
 			"port %d supports only conventional PHY or fixed-link\n",
@@ -1163,9 +1181,10 @@ static void rtl8370mb_phylink_mac_link_down(struct dsa_switch *ds, int port,
 	struct rtl8370mb_port *p;
 	struct rtl8370mb *mb;
 	int ret;
-
+	dev_info(priv->dev, "rtl8370mb_phylink_mac_link_down logical_port : %d \n", port);
 	mb = priv->chip_data;
-	p = &mb->ports[port];
+	p = &mb->ports[look_for_rtl8370mb_port_array_index(port)];
+	//p = &mb->ports[port];
 	cancel_delayed_work_sync(&p->mib_work);
 
 	if (phy_interface_mode_is_rgmii(interface)) {
@@ -1191,9 +1210,10 @@ static void rtl8370mb_phylink_mac_link_up(struct dsa_switch *ds, int port,
 	struct rtl8370mb_port *p;
 	struct rtl8370mb *mb;
 	int ret;
-
+	dev_info(priv->dev, "rtl8370mb_phylink_mac_link_up logical_port : %d \n", port);
 	mb = priv->chip_data;
-	p = &mb->ports[port];
+	p = &mb->ports[look_for_rtl8370mb_port_array_index(port)];
+	//p = &mb->ports[port];
 	schedule_delayed_work(&p->mib_work, 0);
 
 	if (phy_interface_mode_is_rgmii(interface)) {
@@ -1208,7 +1228,41 @@ static void rtl8370mb_phylink_mac_link_up(struct dsa_switch *ds, int port,
 		return;
 	}
 }
+#if USE_REALTEK_API == 1
+static void rtl8370mb_port_stp_state_set(struct dsa_switch *ds, int port,
+					 u8 state)
+{
+	struct realtek_priv *priv = ds->priv;
+	rtk_stp_state_t stpState;
+	if (dsa_is_unused_port(priv->ds, port))
+			return;
+	switch (state) {
+	case BR_STATE_DISABLED:
+		stpState = STP_STATE_DISABLED;
+		break;
+	case BR_STATE_BLOCKING:
+	case BR_STATE_LISTENING:
+		stpState = STP_STATE_BLOCKING;
+		break;
+	case BR_STATE_LEARNING:
+		stpState = STP_STATE_LEARNING;
+		break;
+	case BR_STATE_FORWARDING:
+		stpState = STP_STATE_FORWARDING;
+		break;
+	default:
+		dev_err(priv->dev, "invalid STP state: %u\n", state);
+		return;
+	}
+	mutex_lock(&g_priv->map_lock);
+	g_print_flag = 1;
+	dev_info(priv->dev, "rtk_stp_mstpState_set logicalPort : %d \n", port);		
+	rtk_stp_mstpState_set(0, port, stpState);
+	g_print_flag = 0;
+	mutex_unlock(&g_priv->map_lock);
+}
 
+#else
 static void rtl8370mb_port_stp_state_set(struct dsa_switch *ds, int port,
 					 u8 state)
 {
@@ -1234,7 +1288,7 @@ static void rtl8370mb_port_stp_state_set(struct dsa_switch *ds, int port,
 		dev_err(priv->dev, "invalid STP state: %u\n", state);
 		return;
 	}
-
+	dev_info(priv->dev, "rtl8370mb_port_stp_state_set: 0x%X, 0x%X, 0x%X\n", RTL8365MB_MSTI_CTRL_REG(msti, port), RTL8365MB_MSTI_CTRL_PORT_STATE_MASK(port), val << RTL8365MB_MSTI_CTRL_PORT_STATE_OFFSET(port));
 	regmap_update_bits(priv->map, RTL8365MB_MSTI_CTRL_REG(msti, port),
 			   RTL8365MB_MSTI_CTRL_PORT_STATE_MASK(port),
 			   val << RTL8365MB_MSTI_CTRL_PORT_STATE_OFFSET(port));
@@ -1248,6 +1302,7 @@ static int rtl8370mb_port_set_learning(struct realtek_priv *priv, int port,
 	 * disables learning. When enabling learning, set it to the chip's
 	 * maximum.
 	 */
+	dev_info(priv->dev, "rtl8370mb_port_set_learning: 0x%X, 0x%X\n", RTL8365MB_LUT_PORT_LEARN_LIMIT_REG(port), enable ? RTL8365MB_LEARN_LIMIT_MAX : 0);
 	return regmap_write(priv->map, RTL8365MB_LUT_PORT_LEARN_LIMIT_REG(port),
 			    enable ? RTL8365MB_LEARN_LIMIT_MAX : 0);
 }
@@ -1255,9 +1310,10 @@ static int rtl8370mb_port_set_learning(struct realtek_priv *priv, int port,
 static int rtl8370mb_port_set_isolation(struct realtek_priv *priv, int port,
 					u32 mask)
 {
+	dev_info(priv->dev, "rtl8370mb_port_set_isolation: 0x%X, 0x%X\n", RTL8365MB_PORT_ISOLATION_REG(port), mask);
 	return regmap_write(priv->map, RTL8365MB_PORT_ISOLATION_REG(port), mask);
 }
-
+#endif
 static int rtl8370mb_mib_counter_read(struct realtek_priv *priv, int port,
 				      u32 offset, u32 length, u64 *mibvalue)
 {
@@ -1265,13 +1321,16 @@ static int rtl8370mb_mib_counter_read(struct realtek_priv *priv, int port,
 	u32 val;
 	int ret;
 	int i;
-
 	/* The MIB address is an SRAM address. We request a particular address
 	 * and then poll the control register before reading the value from some
 	 * counter registers.
 	 */
+	rtk_port_t physical_port = rtk_switch_port_L2P_get(port);
+	//dev_info(priv->dev, "rtl8370mb_mib_counter_read: %d, %d\n",port, physical_port);
+
 	ret = regmap_write(priv->map, RTL8365MB_MIB_ADDRESS_REG,
-			   RTL8365MB_MIB_ADDRESS(port, offset));
+			   RTL8365MB_MIB_ADDRESS(physical_port, offset));
+
 	if (ret)
 		return ret;
 
@@ -1308,7 +1367,7 @@ static int rtl8370mb_mib_counter_read(struct realtek_priv *priv, int port,
 
 	/* Only commit the result if no error occurred */
 	*mibvalue = tmpvalue;
-
+			
 	return 0;
 }
 
@@ -1318,7 +1377,7 @@ static void rtl8370mb_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *da
 	struct rtl8370mb *mb;
 	int ret;
 	int i;
-
+	dev_info(priv->dev, "rtl8370mb_get_ethtool_stats logical_port %d: \n", port);
 	mb = priv->chip_data;
 
 	mutex_lock(&mb->mib_lock);
@@ -1340,7 +1399,6 @@ static void rtl8370mb_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *da
 static void rtl8370mb_get_strings(struct dsa_switch *ds, int port, u32 stringset, u8 *data)
 {
 	int i;
-
 	if (stringset != ETH_SS_STATS)
 		return;
 
@@ -1355,7 +1413,6 @@ static int rtl8370mb_get_sset_count(struct dsa_switch *ds, int port, int sset)
 {
 	if (sset != ETH_SS_STATS)
 		return -EOPNOTSUPP;
-
 	return RTL8365MB_MIB_END;
 }
 
@@ -1365,7 +1422,6 @@ static void rtl8370mb_get_phy_stats(struct dsa_switch *ds, int port,
 	struct realtek_priv *priv = ds->priv;
 	struct rtl8370mb_mib_counter *mib;
 	struct rtl8370mb *mb;
-
 	mb = priv->chip_data;
 	mib = &rtl8370mb_mib_counters[RTL8365MB_MIB_dot3StatsSymbolErrors];
 
@@ -1402,7 +1458,7 @@ static void rtl8370mb_get_mac_stats(struct dsa_switch *ds, int port,
 	struct rtl8370mb *mb;
 	int ret;
 	int i;
-
+	dev_info(priv->dev, "rtl8370mb_get_mac_stats logical_port %d: \n", port);
 	mb = priv->chip_data;
 
 	mutex_lock(&mb->mib_lock);
@@ -1466,7 +1522,7 @@ static void rtl8370mb_get_ctrl_stats(struct dsa_switch *ds, int port,
 	struct realtek_priv *priv = ds->priv;
 	struct rtl8370mb_mib_counter *mib;
 	struct rtl8370mb *mb;
-
+	dev_info(priv->dev, "rtl8370mb_get_ctrl_stats logical_port %d: \n", port);
 	mb = priv->chip_data;
 	mib = &rtl8370mb_mib_counters[RTL8365MB_MIB_dot3ControlInUnknownOpcodes];
 
@@ -1499,9 +1555,11 @@ static void rtl8370mb_stats_update(struct realtek_priv *priv, int port)
 	struct rtnl_link_stats64 *stats;
 	int ret;
 	int i;
-
-	stats = &mb->ports[port].stats;
-
+	int p_index = look_for_rtl8370mb_port_array_index(port);
+	
+	//dev_info(priv->dev, "rtl8370mb_stats_update port : %d, index: %d\n", port, p_index);
+	stats = &mb->ports[p_index].stats;
+	//stats = &mb->ports[port].stats;
 	mutex_lock(&mb->mib_lock);
 	for (i = 0; i < RTL8365MB_MIB_END; i++) {
 		struct rtl8370mb_mib_counter *c = &rtl8370mb_mib_counters[i];
@@ -1521,8 +1579,8 @@ static void rtl8370mb_stats_update(struct realtek_priv *priv, int port)
 	if (ret)
 		return;
 
-	spin_lock(&mb->ports[port].stats_lock);
-
+	spin_lock(&mb->ports[p_index].stats_lock);
+	//spin_lock(&mb->ports[port].stats_lock);
 	stats->rx_packets = cnt[RTL8365MB_MIB_ifInUcastPkts] +
 			    cnt[RTL8365MB_MIB_ifInMulticastPkts] +
 			    cnt[RTL8365MB_MIB_ifInBroadcastPkts] -
@@ -1552,7 +1610,8 @@ static void rtl8370mb_stats_update(struct realtek_priv *priv, int port)
 	stats->tx_window_errors = cnt[RTL8365MB_MIB_dot3StatsLateCollisions];
 	stats->tx_errors = stats->tx_aborted_errors + stats->tx_window_errors;
 
-	spin_unlock(&mb->ports[port].stats_lock);
+	spin_unlock(&mb->ports[p_index].stats_lock);
+	//spin_unlock(&mb->ports[port].stats_lock);
 }
 
 static void rtl8370mb_stats_poll(struct work_struct *work)
@@ -1560,8 +1619,8 @@ static void rtl8370mb_stats_poll(struct work_struct *work)
 	struct rtl8370mb_port *p = container_of(to_delayed_work(work),
 						struct rtl8370mb_port,
 						mib_work);
-	struct realtek_priv *priv = p->priv;
 
+	struct realtek_priv *priv = p->priv;
 	rtl8370mb_stats_update(priv, p->index);
 
 	schedule_delayed_work(&p->mib_work, RTL8365MB_STATS_INTERVAL_JIFFIES);
@@ -1573,10 +1632,9 @@ static void rtl8370mb_get_stats64(struct dsa_switch *ds, int port,
 	struct realtek_priv *priv = ds->priv;
 	struct rtl8370mb_port *p;
 	struct rtl8370mb *mb;
-
 	mb = priv->chip_data;
-	p = &mb->ports[port];
-
+	p = &mb->ports[look_for_rtl8370mb_port_array_index(port)];	
+	//p = &mb->ports[port];
 	spin_lock(&p->stats_lock);
 	memcpy(s, &p->stats, sizeof(*s));
 	spin_unlock(&p->stats_lock);
@@ -1586,18 +1644,18 @@ static void rtl8370mb_stats_setup(struct realtek_priv *priv)
 {
 	struct rtl8370mb *mb = priv->chip_data;
 	int i;
-
+	
 	/* Per-chip global mutex to protect MIB counter access, since doing
 	 * so requires accessing a series of registers in a particular order.
 	 */
 	mutex_init(&mb->mib_lock);
 
 	for (i = 0; i < priv->num_ports; i++) {
-		struct rtl8370mb_port *p = &mb->ports[i];
-
+		
 		if (dsa_is_unused_port(priv->ds, i))
 			continue;
-
+		struct rtl8370mb_port *p = &mb->ports[look_for_rtl8370mb_port_array_index(i)];
+		//struct rtl8370mb_port *p = &mb->ports[i];
 		/* Per-port spinlock to protect the stats64 data */
 		spin_lock_init(&p->stats_lock);
 
@@ -1614,11 +1672,11 @@ static void rtl8370mb_stats_teardown(struct realtek_priv *priv)
 	int i;
 
 	for (i = 0; i < priv->num_ports; i++) {
-		struct rtl8370mb_port *p = &mb->ports[i];
-
+		
 		if (dsa_is_unused_port(priv->ds, i))
 			continue;
-
+		struct rtl8370mb_port *p = &mb->ports[look_for_rtl8370mb_port_array_index(i)];
+		//struct rtl8370mb_port *p = &mb->ports[i];
 		cancel_delayed_work_sync(&p->mib_work);
 	}
 }
@@ -1672,13 +1730,12 @@ static irqreturn_t rtl8370mb_irq(int irq, void *data)
 
 	if (!line_changes)
 		goto out_none;
-
 	for_each_set_bit(line, &line_changes, priv->num_ports) {
 		int child_irq = irq_find_mapping(priv->irqdomain, line);
-
+		if (!child_irq)
+			dev_err(priv->dev, "failed to get irq domain mapping!!!!!\n");
 		handle_nested_irq(child_irq);
 	}
-
 	return IRQ_HANDLED;
 
 out_error:
@@ -1859,7 +1916,7 @@ static void rtl8370mb_irq_teardown(struct realtek_priv *priv)
 	struct rtl8370mb *mb = priv->chip_data;
 	int virq;
 	int i;
-
+	dev_info(priv->dev, "crtl8370mb_irq_teardown @@@@\n");
 	if (mb->irq) {
 		free_irq(mb->irq, priv);
 		mb->irq = 0;
@@ -1882,11 +1939,34 @@ static int rtl8370mb_cpu_config(struct realtek_priv *priv)
 	struct rtl8370mb_cpu *cpu = &mb->cpu;
 	u32 val;
 	int ret;
+	//current cpu->trap_port is 0x10
+	//current cpu->mask is 0x30000
+	rtk_portmask_t cpuPortMask;
+	RTK_PORTMASK_CLEAR(cpuPortMask);
+	cpuPortMask.bits[0] = cpu->mask;
+	if ((ret = rtk_cpu_tagPort_set(cpu->trap_port, cpu->insert)) != RT_ERR_OK)
+		dev_info(priv->dev,"%s %s %d, rtk_cpu_tagPort_set fail (0x%X)\n",__FILE__, __FUNCTION__, __LINE__, ret);
 
+	if ((ret = rtk_cpu_awarePort_set(&cpuPortMask)) != RT_ERR_OK)
+		dev_info(priv->dev,"%s %s %d, rtk_cpu_awarePort_set fail (0x%X)\n",__FILE__, __FUNCTION__, __LINE__, ret);
+
+	if ((ret = rtk_cpu_tagPosition_set(cpu->position)) != RT_ERR_OK)
+		dev_info(priv->dev,"%s %s %d, rtk_cpu_tagPosition_set fail (0x%X)\n",__FILE__, __FUNCTION__, __LINE__, ret);
+
+	if ((ret = rtk_cpu_tagLength_set((cpu->format == 0) ? CPU_LEN_8BYTES : CPU_LEN_4BYTES)) != RT_ERR_OK)
+		dev_info(priv->dev,"%s %s %d, rtk_cpu_tagLength_set fail (0x%X)\n",__FILE__, __FUNCTION__, __LINE__, ret);
+
+	if ((ret = rtk_cpu_acceptLength_set((cpu->rx_length == 0) ? CPU_RX_72BYTES : CPU_RX_64BYTES)) != RT_ERR_OK)
+		dev_info(priv->dev,"%s %s %d, rtk_cpu_acceptLength_set fail (0x%X)\n",__FILE__, __FUNCTION__, __LINE__, ret);
+
+	if ((ret = rtk_cpu_enable_set(cpu->enable ? ENABLED : DISABLED)) != RT_ERR_OK)
+		dev_info(priv->dev,"%s %s %d, rtk_cpu_enable_set fail (0x%X)\n",__FILE__, __FUNCTION__, __LINE__, ret);
+
+#if 0
 	ret = regmap_update_bits(priv->map, RTL8365MB_CPU_PORT_MASK_REG,
 				 RTL8365MB_CPU_PORT_MASK_MASK,
-				 FIELD_PREP(RTL8365MB_CPU_PORT_MASK_MASK,
-					    cpu->mask));
+				 FIELD_PREP(RTL8365MB_CPU_PORT_MASK_MASK, cpu->mask));//
+
 	if (ret)
 		return ret;
 
@@ -1896,14 +1976,14 @@ static int rtl8370mb_cpu_config(struct realtek_priv *priv)
 	      FIELD_PREP(RTL8365MB_CPU_CTRL_RXBYTECOUNT_MASK, cpu->rx_length) |
 	      FIELD_PREP(RTL8365MB_CPU_CTRL_TAG_FORMAT_MASK, cpu->format) |
 	      FIELD_PREP(RTL8365MB_CPU_CTRL_TRAP_PORT_MASK, cpu->trap_port & 0x7) |
-	      FIELD_PREP(RTL8365MB_CPU_CTRL_TRAP_PORT_EXT_MASK,
-			 cpu->trap_port >> 3 & 0x1);
+	      FIELD_PREP(RTL8365MB_CPU_CTRL_TRAP_PORT_EXT_MASK, cpu->trap_port >> 3 & 0x1);
 	ret = regmap_write(priv->map, RTL8365MB_CPU_CTRL_REG, val);
 	if (ret)
 		return ret;
-
+#endif
 	return 0;
 }
+
 
 static int rtl8370mb_change_tag_protocol(struct dsa_switch *ds,
 					 enum dsa_tag_protocol proto)
@@ -1988,39 +2068,44 @@ static int rtl8370mb_setup(struct dsa_switch *ds)
 	struct rtl8370mb_cpu *cpu;
 	struct dsa_port *cpu_dp;
 	struct rtl8370mb *mb;
+	
 	int ret;
 	int i;
     rtk_api_ret_t rtk_ret;
+	rtk_portmask_t pisoPortmask;
+	rtk_port_t logical_port;
 
 
 	mb = priv->chip_data;
 	cpu = &mb->cpu;
 
+#if USE_REALTEK_API == 1
     //set priv to global
     set_global_priv(priv);
-
-	// ret = rtl8370mb_reset_chip(priv);
-	// if (ret) {
-	// 	dev_err(priv->dev, "failed to reset chip: %d\n", ret);
-	// 	goto out_error;
-	// }
 
     dev_info(priv->dev, "Start Realtek RTL8370 switch init\n");
 	mutex_lock(&g_priv->map_lock);
     rtk_ret = rtk_switch_init();
 	mutex_unlock(&g_priv->map_lock);
-
+	
 	if(rtk_ret) 
 		return rtk_ret;
     dev_info(priv->dev, "rtk_switch_init : 0x%X\n", rtk_ret);
 
-	// /* Configure switch to vendor-defined initial state */
-	// ret = rtl8370mb_switch_init(priv);
-	// if (ret) {
-	// 	dev_err(priv->dev, "failed to initialize switch: %d\n", ret);
-	// 	goto out_error;
-	// }
+#else
+	ret = rtl8370mb_reset_chip(priv);33
+	if (ret) {
+		dev_err(priv->dev, "failed to reset chip: %d\n", ret);
+		goto out_error;
+	}
 
+	/* Configure switch to vendor-defined initial state */
+	ret = rtl8370mb_switch_init(priv);
+	if (ret) {
+		dev_err(priv->dev, "failed to initialize switch: %d\n", ret);
+		goto out_error;
+	}
+#endif
 	/* Set up cascading IRQs */
 	ret = rtl8370mb_irq_setup(priv);
 	if (ret == -EPROBE_DEFER)
@@ -2029,47 +2114,85 @@ static int rtl8370mb_setup(struct dsa_switch *ds)
 		dev_info(priv->dev, "no interrupt support\n");
 
 	/* Configure CPU tagging */
+	int extint_index = 0;
 	dsa_switch_for_each_cpu_port(cpu_dp, priv->ds) {
-		cpu->mask |= BIT(cpu_dp->index);
-
+		struct rtl8370mb_extint *extint = &mb->chip_info->extints[extint_index];
+		extint->port = cpu_dp->index;
 		if (cpu->trap_port == RTL8365MB_MAX_NUM_PORTS)
 			cpu->trap_port = cpu_dp->index;
+		cpu->mask |= BIT(cpu_dp->index);
+		extint_index++;
 	}
 	cpu->enable = cpu->mask > 0;
+
 	ret = rtl8370mb_cpu_config(priv);
 	if (ret)
 		goto out_teardown_irq;
 
+	RTK_PORTMASK_CLEAR(pisoPortmask);
+	//rtk_switch_portmask_P2L_get(cpu->mask, &pisoPortmask);
+
 	dev_info(priv->dev,"%s %s %d ,cpu_dp:0x%x,cpu->trap_port:0x%x\n",__FILE__,__FUNCTION__,__LINE__,cpu_dp->index,cpu->trap_port);
-	cpu->enable = cpu->mask > 0;
-	dev_info(priv->dev,"%s %s %d ,cpu-enb:%d,cpu-mask:%d\n",__FILE__,__FUNCTION__,__LINE__,cpu->enable,cpu->mask);
-
+	dev_info(priv->dev,"%s %s %d ,cpu-enb:%x,cpu-mask:%x\n",__FILE__,__FUNCTION__,__LINE__,cpu->enable,cpu->mask);
+	dev_info(priv->dev,"%s %s %d ,priv->num_ports:%d\n",__FILE__,__FUNCTION__,__LINE__,priv->num_ports);
+	dev_info(priv->dev,"%s %s %d ,pisoPortmask:0x%X \n",__FILE__,__FUNCTION__,__LINE__, pisoPortmask.bits[0]);
 	/* Configure ports */
+	int x = 0;	//Mapping of port numbers to rtl8370mb_port arrays
 	for (i = 0; i < priv->num_ports; i++) {
-		struct rtl8370mb_port *p = &mb->ports[i];
-
+		struct rtl8370mb_port *p = &mb->ports[x];
 		if (dsa_is_unused_port(priv->ds, i))
 			continue;
-
+		logical_port = i;
+		//dev_info(priv->dev, "rtk_port_isolation_set logical_port : %d %d %d \n", logical_port, i, x);
 		/* Forward only to the CPU */
+#if USE_REALTEK_API == 1
+		if(i < 8)
+		{
+			pisoPortmask.bits[0] = cpu->mask;
+			mutex_lock(&g_priv->map_lock);
+			g_print_flag = 1;
+			dev_info(priv->dev, "rtk_port_isolation_set logical_port : %d \n", logical_port);
+			ret = rtk_port_isolation_set(logical_port, &pisoPortmask);
+			g_print_flag = 0;
+			mutex_unlock(&g_priv->map_lock);
+		}
+#else		
 		ret = rtl8370mb_port_set_isolation(priv, i, cpu->mask);
-		if (ret)
+#endif				
+		if (ret){
+			dev_info(priv->dev,"%s %s %d ,rtl8370mb port set isolation :%d\n",__FILE__,__FUNCTION__,__LINE__,ret);
 			goto out_teardown_irq;
-
-		/* Disable learning */
+		}
+		/* Disable learning */	
+#if USE_REALTEK_API == 1
+		if(i < 8)
+		{
+			
+			mutex_lock(&g_priv->map_lock);
+			g_print_flag = 1;
+			dev_info(priv->dev, "rtk_l2_limitLearningCnt_set logical_port : %d \n", logical_port);		
+			ret = rtk_l2_limitLearningCnt_set(logical_port, 0);
+			g_print_flag = 0;
+			mutex_unlock(&g_priv->map_lock);
+		}
+#else
 		ret = rtl8370mb_port_set_learning(priv, i, false);
-		if (ret)
+#endif
+		if (ret){
+			dev_info(priv->dev,"%s %s %d , rtl8370mb port set learning :%d\n",__FILE__,__FUNCTION__,__LINE__,ret);
 			goto out_teardown_irq;
-
+		}
 		/* Set the initial STP state of all ports to DISABLED, otherwise
 		 * ports will still forward frames to the CPU despite being
 		 * administratively down by default.
 		 */
-		rtl8370mb_port_stp_state_set(priv->ds, i, BR_STATE_DISABLED);
+		rtl8370mb_port_stp_state_set(priv->ds, logical_port, BR_STATE_DISABLED);
+		
 
 		/* Set up per-port private data */
 		p->priv = priv;
-		p->index = i;
+		p->index = p_num[x] = i;
+		x++;
 	}
 
 	/* Set maximum packet length to 1536 bytes */
@@ -2107,7 +2230,7 @@ out_error:
 static void rtl8370mb_teardown(struct dsa_switch *ds)
 {
 	struct realtek_priv *priv = ds->priv;
-
+	dev_info(priv->dev, "rtl8370mb_teardown!!!!!!!!!!\n");
 	rtl8370mb_stats_teardown(priv);
 	rtl8370mb_irq_teardown(priv);
 }
@@ -2147,7 +2270,8 @@ static int rtl8370mb_detect(struct realtek_priv *priv)
 	int ret;
 	int i;
 
-	dev_err(priv->dev, "****************rtl8370mb_detect\n");
+	
+
 	ret = rtl8370mb_get_chip_id_and_ver(priv->map, &chip_id, &chip_ver);
 	if (ret) {
 		dev_err(priv->dev, "failed to read chip id and version: %d\n",
@@ -2172,6 +2296,8 @@ static int rtl8370mb_detect(struct realtek_priv *priv)
 	}
 
 	dev_info(priv->dev, "found an %s switch\n", mb->chip_info->name);
+
+
 
 	priv->num_ports = RTL8365MB_MAX_NUM_PORTS;
 	mb->priv = priv;
@@ -2227,6 +2353,7 @@ static const struct dsa_switch_ops rtl8370mb_switch_ops_mdio = {
 	.get_eth_mac_stats = rtl8370mb_get_mac_stats,
 	.get_eth_ctrl_stats = rtl8370mb_get_ctrl_stats,
 	.get_stats64 = rtl8370mb_get_stats64,
+
 };
 
 static const struct realtek_ops rtl8370mb_ops = {

@@ -150,6 +150,7 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 	struct device_node *np;
 	int ret;
 
+	dev_err (dev,"i***********realtek_mdio_probe\n");
 	var = of_device_get_match_data(dev);
 	if (!var)
 		return -EINVAL;
@@ -199,11 +200,11 @@ static int realtek_mdio_probe(struct mdio_device *mdiodev)
 	priv->leds_disabled = of_property_read_bool(np, "realtek,disable-leds");
 
 	dev_err(dev, " devm_gpiod_get_optional\n");
-	/*priv->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
+	priv->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(priv->reset)) {
 		dev_err(dev, "failed to get RESET GPIO\n");
 		return PTR_ERR(priv->reset);
-	}*/
+	}
 
 	priv->reset= NULL;
 	if (priv->reset) {
