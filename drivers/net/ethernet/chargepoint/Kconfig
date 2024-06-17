@@ -1,0 +1,10 @@
+config NET_VENDOR_CHARGEPOINT
+    bool "ChargePoint devices"
+    default y
+
+if NET_VENDOR_CHARGEPOINT
+
+config CHPT_ETH_SPI
+    tristate "ChargePoint Eth SPI support"
+
+endif # NET_VENDOR_CHARGEPOINT

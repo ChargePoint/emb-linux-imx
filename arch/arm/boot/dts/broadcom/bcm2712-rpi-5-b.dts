@@ -51,7 +51,7 @@
 #undef uart5
 
 / {
-	compatible = "raspberrypi,5-model-b", "brcm,bcm2712";
+	compatible = "raspberrypi,5-model-b", "brcm,bcm2712", "chpt,labbox";
 	model = "Raspberry Pi 5";
 
 	/* Will be filled by the bootloader */
@@ -500,6 +500,12 @@ dpi_16bit_gpio2:        &rp1_dpi_16bit_gpio2        { };
 		pins = "gpio1";
 		bias-pull-up;
 	};
+
+	ethspi_sync: ethspi_sync_gpio {
+		function = "gpio";
+		pins = "gpio5";
+		bias-pull-down;
+	};
 };
 
 spi10_pins: &spi10_gpio2 {};
@@ -516,9 +522,39 @@ spi10_cs_pins: &spi10_cs_gpio1 {};
 		#address-cells = <1>;
 		#size-cells = <0>;
 		spi-max-frequency = <20000000>;
+		status = "disabled";
+	};
+
+	ethspi: ethspi@0 {
+		compatible = "chpt,eth-spi";
+		reg = <0>;
+		pinctrl-0 = <&ethspi_sync>;
+		interrupt-parent = <&gpio>;
+		interrupts = <23 0x1>;
+		spi-max-frequency = <1000000>;
 		status = "okay";
 	};
 };
+
+
+&spidev0 {
+	status = "disabled";
+};
+
+&spi0 {
+	status = "okay";
+	
+	spidev@0 {
+		status = "disabled";
+	};
+
+	spidev@1 {
+		status = "disabled";
+	};
+
+};
+
+
 
 // =============================================
 // Board specific stuff here
