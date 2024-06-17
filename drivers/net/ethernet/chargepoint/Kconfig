@@ -25,4 +25,16 @@ config ETH_SPI
 	  To compile this driver as a module, choose M here. The module
 	  will be called eth-spi.
 
+config CHPT_ETH_SPI
+	tristate "ChargePoint Eth SPI support"
+	depends on SPI_MASTER && OF
+
+config CHPT_ETH_SPI_DEBUG
+	bool "ChargePoint Eth SPI debug logging"
+	depends on CHPT_ETH_SPI
+
+config CHPT_ETH_SPI_VERBOSE
+	bool "ChargePoint Eth SPI verbose debug logging"
+	depends on CHPT_ETH_SPI_DEBUG
+
 endif # NET_VENDOR_CHARGEPOINT
