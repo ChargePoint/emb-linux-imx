@@ -16,15 +16,6 @@ config NET_VENDOR_CHARGEPOINT
 
 if NET_VENDOR_CHARGEPOINT
 
-config ETH_SPI
-	tristate "Ethernet over SPI based on Qualcomm Atheros QCA7000"
-	depends on SPI_MASTER && OF
-	help
-	  This SPI protocol driver supports ethernet over spi for ChargePoint devices.
-
-	  To compile this driver as a module, choose M here. The module
-	  will be called eth-spi.
-
 config CHPT_ETH_SPI
 	tristate "ChargePoint Eth SPI support"
 	depends on SPI_MASTER && OF
