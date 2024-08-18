@@ -1,0 +1,86 @@
+config WLAN_VENDOR_LAIRD
+	bool "Laird Connectivity WLAN devices"
+	default y
+	help
+	  If you have a wireless card belonging to this class, say Y.
+
+	  Note that the answer to this question doesn't directly affect the
+	  kernel: saying N will just cause the configurator to skip all
+	  the questions about cards. If you say Y, you will be asked for
+	  your specific card in the following questions.
+
+if WLAN_VENDOR_LAIRD
+
+config LRDMWL
+	tristate "60 Series driver (mac80211 compatible)"
+	depends on MAC80211
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl.
+
+if LRDMWL
+
+config LRDMWL_PCIE
+	tristate "PCIe Bus"
+	depends on PCI
+	depends on FW_LOADER
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module for PCIE
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl_pcie.
+
+config LRDMWL_SDIO
+	tristate "SDIO Bus"
+	depends on MMC
+	depends on FW_LOADER
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module for SDIO
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl_sdio.
+
+config LRDMWL_USB
+	tristate "USB Bus"
+	depends on USB
+	depends on FW_LOADER
+	help
+		Select to build the driver supporting the:
+
+		Laird Connectivity 60 Series Wi-Fi module for USB
+
+		This driver uses the kernel's mac80211 subsystem.
+
+		If you want to compile the driver as a module (= code which can be
+		inserted in and removed from the running kernel whenever you want),
+		say M here and read <file:Documentation/kbuild/modules.txt>.  The
+		module will be called lrdmwl_usb.
+
+config LRDMWL_FIPS
+	bool "FIPS support for 60 Series based SOMs"
+	help
+		Enables FIPS operation for SOM60
+
+endif # LRDMWL
+
+endif # WLAN_VENDOR_LAIRD

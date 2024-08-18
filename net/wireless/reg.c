@@ -1036,6 +1036,36 @@ static int query_regdb(const char *alpha2)
 	return -ENODATA;
 }
 
+#ifndef _REMOVE_LAIRD_MODS_
+int check_regdb(const char *alpha2)
+{
+	const struct fwdb_header *hdr = regdb;
+	const struct fwdb_country *country;
+
+	int rc = -ENODATA;
+
+	ASSERT_RTNL();
+
+	if (IS_ERR(regdb)) {
+		rc = PTR_ERR(regdb);
+		goto done;
+	}
+
+	country = &hdr->country[0];
+	while (country->coll_ptr) {
+		if (alpha2_equal(alpha2, country->alpha2)) {
+			rc = REG_REQ_OK;
+			goto done;
+		}
+		country++;
+	}
+
+done:
+	return rc;
+}
+EXPORT_SYMBOL(check_regdb);
+#endif
+
 static void regdb_fw_cb(const struct firmware *fw, void *context)
 {
 	int set_error = 0;

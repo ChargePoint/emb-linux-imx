@@ -1942,6 +1942,92 @@ cfg80211_get_bss_channel(struct wiphy *wiphy, const u8 *ie, size_t ielen,
 	return alt_channel;
 }
 
+#ifndef _REMOVE_LAIRD_MODS_
+// add regulatory hint for bonded non-DFS/RADAR channels
+// needed to clear the NO_IR flag for AP creation
+// note, this routine only handles 5GHz, 40MHz and 80MHz channels
+static
+void _hint_found_beacon_bonded(struct wiphy *wiphy,
+							  struct ieee80211_channel *beacon_chan,
+							  gfp_t gfp,
+							  const u8 *ie, size_t ielen)
+{
+	struct ieee80211_channel *alt_channel;
+	const u8 *tmp;
+	struct ieee80211_ht_operation *htop = NULL;
+	struct ieee80211_vht_operation *vhtop = NULL;
+	int cfreq0 = 0;
+	u32 bcnfreq;
+
+	if (beacon_chan->band != NL80211_BAND_5GHZ)
+		return;
+	if (beacon_chan->flags & IEEE80211_CHAN_RADAR)
+		return;
+
+	tmp = cfg80211_find_ie(WLAN_EID_VHT_OPERATION, ie, ielen);
+	if (tmp && tmp[1] >= sizeof(struct ieee80211_vht_operation))
+		vhtop = (void *)(tmp + 2);
+	if (vhtop && vhtop->chan_width == 1) {
+		// 80MHz+
+		u32 freq;
+		int i;
+		cfreq0 = (int)vhtop->center_freq_seg0_idx;
+		switch (cfreq0) {
+		case 42:
+		case 58:
+		case 106:
+		case 122:
+		case 138:
+		case 155:
+			break;
+		default:
+			return; // invalid center channel
+		}
+		bcnfreq = ieee80211_channel_to_khz(beacon_chan);
+		freq = ieee80211_channel_to_freq_khz(cfreq0-6, beacon_chan->band);
+		if (!freq)
+			return; // invalid starting frequency
+		if (bcnfreq < freq)
+			return; // beacon frequency outside 80MHz window
+		if (bcnfreq > freq + 60000)
+			return; // beacon frequency outsize 80MHz window
+		for (i=0; i<4; i++, freq +=20000) {
+			if (freq == bcnfreq)
+				continue;
+			alt_channel = ieee80211_get_channel_khz(wiphy, freq);
+			if (alt_channel) {
+				if (!alt_channel->beacon_found)
+					regulatory_hint_found_beacon(wiphy, alt_channel, gfp);
+			}
+		}
+		return;
+	}
+
+	tmp = cfg80211_find_ie(WLAN_EID_HT_OPERATION, ie, ielen);
+	if (tmp && tmp[1] >= sizeof(struct ieee80211_ht_operation))
+		htop = (void *)(tmp + 2);
+	if (htop) {
+		u32 bcnfreq = ieee80211_channel_to_khz(beacon_chan);
+		u32 freq;
+		switch (htop->ht_param & IEEE80211_HT_PARAM_CHA_SEC_OFFSET) {
+		case IEEE80211_HT_PARAM_CHA_SEC_ABOVE:
+			freq = bcnfreq + 20000;
+			break;
+		case IEEE80211_HT_PARAM_CHA_SEC_BELOW:
+			freq = bcnfreq - 20000;
+			break;
+		default:
+			return;
+		}
+		alt_channel = ieee80211_get_channel_khz(wiphy, freq);
+		if (alt_channel) {
+			if (!alt_channel->beacon_found)
+				regulatory_hint_found_beacon(wiphy, alt_channel, gfp);
+		}
+	}
+}
+#endif
+
 /* Returned bss is reference counted and must be cleaned up appropriately. */
 static struct cfg80211_bss *
 cfg80211_inform_single_bss_data(struct wiphy *wiphy,
@@ -2033,6 +2119,11 @@ cfg80211_inform_single_bss_data(struct wiphy *wiphy,
 	} else {
 		if (res->pub.capability & WLAN_CAPABILITY_ESS)
 			regulatory_hint_found_beacon(wiphy, channel, gfp);
+
+#ifndef _REMOVE_LAIRD_MODS_
+			// add regulatory hint for 5GHz bonded channels (40/80MHz)
+			_hint_found_beacon_bonded(wiphy, channel, gfp, ie, ielen);
+#endif
 	}
 
 	if (non_tx_data) {
@@ -2513,6 +2604,11 @@ cfg80211_inform_single_bss_frame_data(struct wiphy *wiphy,
 	} else {
 		if (res->pub.capability & WLAN_CAPABILITY_ESS)
 			regulatory_hint_found_beacon(wiphy, channel, gfp);
+
+#ifndef _REMOVE_LAIRD_MODS_
+			// add regulatory hint for 5GHz bonded channels (40/80MHz)
+			_hint_found_beacon_bonded(wiphy, channel, gfp, variable, ielen);
+#endif
 	}
 
 	trace_cfg80211_return_bss(&res->pub);

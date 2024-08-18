@@ -6,9 +6,8 @@
 #ifndef BRCMFMAC_BUS_H
 #define BRCMFMAC_BUS_H
 
-#include <linux/kernel.h>
-#include <linux/firmware.h>
 #include "debug.h"
+#include <linux/version.h>
 
 /* IDs of the 6 default common rings of msgbuf protocol */
 #define BRCMF_H2D_MSGRING_CONTROL_SUBMIT	0
@@ -24,6 +23,12 @@
 #define BRCMF_NROF_COMMON_MSGRINGS	(BRCMF_NROF_H2D_COMMON_MSGRINGS + \
 					 BRCMF_NROF_D2H_COMMON_MSGRINGS)
 
+/* The interval to poll console */
+#define BRCMF_CONSOLE	10
+
+/* The maximum console interval value (5 mins) */
+#define MAX_CONSOLE_INTERVAL	(5 * 60)
+
 /* The level of bus communication with the dongle */
 enum brcmf_bus_state {
 	BRCMF_BUS_DOWN,		/* Not ready for frame transfers */
@@ -34,11 +39,6 @@ enum brcmf_bus_state {
 enum brcmf_bus_protocol_type {
 	BRCMF_PROTO_BCDC,
 	BRCMF_PROTO_MSGBUF
-};
-
-/* Firmware blobs that may be available */
-enum brcmf_blob_type {
-	BRCMF_BLOB_CLM,
 };
 
 struct brcmf_mp_device;
@@ -67,7 +67,7 @@ struct brcmf_bus_dcmd {
  * @wowl_config: specify if dongle is configured for wowl when going to suspend
  * @get_ramsize: obtain size of device memory.
  * @get_memdump: obtain device memory dump in provided buffer.
- * @get_blob: obtain a firmware blob.
+ * @get_fwname: obtain firmware name.
  *
  * This structure provides an abstract interface towards the
  * bus specific driver. For control messages to common driver
@@ -84,8 +84,8 @@ struct brcmf_bus_ops {
 	void (*wowl_config)(struct device *dev, bool enabled);
 	size_t (*get_ramsize)(struct device *dev);
 	int (*get_memdump)(struct device *dev, void *data, size_t len);
-	int (*get_blob)(struct device *dev, const struct firmware **fw,
-			enum brcmf_blob_type type);
+	int (*get_fwname)(struct device *dev, const char *ext,
+			  unsigned char *fw_name);
 	void (*debugfs_create)(struct device *dev);
 	int (*reset)(struct device *dev);
 };
@@ -125,6 +125,19 @@ struct brcmf_bus_stats {
 };
 
 /**
+ * struct brcmf_bt_dev - bt shared SDIO device.
+ *
+ * @ bt_data: bt internal structure data
+ * @ bt_sdio_int_cb: bt registered interrupt callback function
+ * @ bt_use_count: Counter that tracks whether BT is using the bus
+ */
+struct brcmf_bt_dev {
+	void	*bt_data;
+	void	(*bt_sdio_int_cb)(void *data);
+	u32	use_count; /* Counter for tracking if BT is using the bus */
+};
+
+/**
  * struct brcmf_bus - interface structure between common and bus layer
  *
  * @bus_priv: pointer to private bus device.
@@ -139,6 +152,7 @@ struct brcmf_bus_stats {
  * @wowl_supported: is wowl supported by bus driver.
  * @chiprev: revision of the dongle chip.
  * @msgbuf: msgbuf protocol parameters provided by bus layer.
+ * @bt_dev: bt shared SDIO device
  */
 struct brcmf_bus {
 	union {
@@ -159,6 +173,9 @@ struct brcmf_bus {
 
 	const struct brcmf_bus_ops *ops;
 	struct brcmf_bus_msgbuf *msgbuf;
+#ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
+	struct brcmf_bt_dev *bt_dev;
+#endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
 };
 
 /*
@@ -227,10 +244,10 @@ int brcmf_bus_get_memdump(struct brcmf_bus *bus, void *data, size_t len)
 }
 
 static inline
-int brcmf_bus_get_blob(struct brcmf_bus *bus, const struct firmware **fw,
-		       enum brcmf_blob_type type)
+int brcmf_bus_get_fwname(struct brcmf_bus *bus, const char *ext,
+			 unsigned char *fw_name)
 {
-	return bus->ops->get_blob(bus->dev, fw, type);
+	return bus->ops->get_fwname(bus->dev, ext, fw_name);
 }
 
 static inline
@@ -256,14 +273,14 @@ int brcmf_bus_reset(struct brcmf_bus *bus)
  */
 
 /* Receive frame for delivery to OS.  Callee disposes of rxp. */
-void brcmf_rx_frame(struct device *dev, struct sk_buff *rxp, bool handle_event,
-		    bool inirq);
+struct sk_buff *brcmf_rx_frame(struct device *dev, struct sk_buff *rxp, bool handle_event,
+			       bool inirq);
 /* Receive async event packet from firmware. Callee disposes of rxp. */
 void brcmf_rx_event(struct device *dev, struct sk_buff *rxp);
 
 int brcmf_alloc(struct device *dev, struct brcmf_mp_device *settings);
 /* Indication from bus module regarding presence/insertion of dongle. */
-int brcmf_attach(struct device *dev);
+int brcmf_attach(struct device *dev, bool start_bus);
 /* Indication from bus module regarding removal/absence of dongle */
 void brcmf_detach(struct device *dev);
 void brcmf_free(struct device *dev);
@@ -279,6 +296,7 @@ void brcmf_bus_change_state(struct brcmf_bus *bus, enum brcmf_bus_state state);
 
 s32 brcmf_iovar_data_set(struct device *dev, char *name, void *data, u32 len);
 void brcmf_bus_add_txhdrlen(struct device *dev, uint len);
+int brcmf_fwlog_attach(struct device *dev);
 
 #ifdef CONFIG_BRCMFMAC_SDIO
 void brcmf_sdio_exit(void);

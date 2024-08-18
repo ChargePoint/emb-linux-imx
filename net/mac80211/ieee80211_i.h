@@ -117,6 +117,11 @@ struct ieee80211_bss {
 
 	/* Keep track of what bits of information we have valid info for. */
 	u8 valid_data;
+
+#ifndef _REMOVE_LAIRD_MODS_
+	// scaled averaged signal level
+	s32 avg_signal;
+#endif
 };
 
 /**
@@ -552,6 +557,14 @@ struct ieee80211_if_managed {
 	 */
 	u8 *assoc_req_ies;
 	size_t assoc_req_ies_len;
+
+#ifndef _REMOVE_LAIRD_MODS_
+	struct {
+		int enabled;
+		int ipv4;
+		int ipv6;
+	} dms;
+#endif
 };
 
 struct ieee80211_if_ibss {

@@ -418,6 +418,17 @@ struct wiphy *wiphy_new_nm(const struct cfg80211_ops *ops, int sizeof_priv,
 	struct cfg80211_registered_device *rdev;
 	int alloc_size;
 
+	/*
+	 * Make sure the padding is >= the rest of the struct so that we
+	 * always keep it large enough to pad out the entire original
+	 * kernel's struct. We really only need to make sure it's larger
+	 * than the kernel compat is compiled against, but since it'll
+	 * only increase in size make sure it's larger than the current
+	 * version of it. Subtract since it's included.
+	 */
+	BUILD_BUG_ON(WIPHY_COMPAT_PAD_SIZE <
+		     sizeof(struct wiphy) - WIPHY_COMPAT_PAD_SIZE);
+
 	WARN_ON(ops->add_key && (!ops->del_key || !ops->set_default_key));
 	WARN_ON(ops->auth && (!ops->assoc || !ops->deauth || !ops->disassoc));
 	WARN_ON(ops->connect && !ops->disconnect);
@@ -574,13 +585,15 @@ static int wiphy_verify_combinations(struct wiphy *wiphy)
 
 		c = &wiphy->iface_combinations[i];
 
+#ifndef _REMOVE_LAIRD_MODS_
+#else
 		/*
 		 * Combinations with just one interface aren't real,
 		 * however we make an exception for DFS.
 		 */
 		if (WARN_ON((c->max_interfaces < 2) && !c->radar_detect_widths))
 			return -EINVAL;
-
+#endif
 		/* Need at least one channel */
 		if (WARN_ON(!c->num_different_channels))
 			return -EINVAL;
@@ -1341,10 +1354,15 @@ void cfg80211_init_wdev(struct wireless_dev *wdev)
 	/* allow mac80211 to determine the timeout */
 	wdev->ps_timeout = -1;
 
-	if ((wdev->iftype == NL80211_IFTYPE_STATION ||
-	     wdev->iftype == NL80211_IFTYPE_P2P_CLIENT ||
-	     wdev->iftype == NL80211_IFTYPE_ADHOC) && !wdev->use_4addr)
-		wdev->netdev->priv_flags |= IFF_DONT_BRIDGE;
+#ifndef _REMOVE_LAIRD_MODS_
+		if (wdev->iftype == NL80211_IFTYPE_P2P_CLIENT && !wdev->use_4addr)
+			wdev->netdev->priv_flags |= IFF_DONT_BRIDGE;
+#else
+		if ((wdev->iftype == NL80211_IFTYPE_STATION ||
+		     wdev->iftype == NL80211_IFTYPE_P2P_CLIENT ||
+		     wdev->iftype == NL80211_IFTYPE_ADHOC) && !wdev->use_4addr)
+			wdev->netdev->priv_flags |= IFF_DONT_BRIDGE;
+#endif
 
 	INIT_WORK(&wdev->disconnect_wk, cfg80211_autodisconnect_wk);
 }
