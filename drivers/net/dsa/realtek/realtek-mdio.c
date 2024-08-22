@@ -269,6 +269,9 @@ static const struct of_device_id realtek_mdio_of_match[] = {
 #if IS_ENABLED(CONFIG_NET_DSA_REALTEK_RTL8365MB)
 	{ .compatible = "realtek,rtl8365mb", .data = &rtl8365mb_variant, },
 #endif
+#if IS_ENABLED(CONFIG_NET_DSA_REALTEK_RTL8370MB)
+	{ .compatible = "realtek,rtl8370mb", .data = &rtl8370mb_variant, },
+#endif
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, realtek_mdio_of_match);
