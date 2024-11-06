@@ -123,19 +123,19 @@ static struct sk_buff *eth_spi_process(struct net_device *net_dev,
 				return rx_skb;
 			}
 			skb_put_data(rx_skb, rx_frame->buf, frame_len);
-		}
 
-		if (rx_frame->frag_idx == rx_frame->frag_tot) {
-			// last frame
-			rx_skb->protocol = eth_type_trans(rx_skb, rx_skb->dev);
-			skb_checksum_none_assert(rx_skb);
+			if (rx_frame->frag_idx == rx_frame->frag_tot) {
+				// last frame
+				rx_skb->protocol = eth_type_trans(rx_skb, rx_skb->dev);
+				skb_checksum_none_assert(rx_skb);
 
-			net_dev->stats.rx_packets++;
-			net_dev->stats.rx_bytes += rx_skb->len;
-			netdev_dbg(net_dev, "Rx-ing packet: Size: %d\n",
-				   rx_skb->len);
-			netif_rx(rx_skb);
-			rx_skb = NULL;
+				net_dev->stats.rx_packets++;
+				net_dev->stats.rx_bytes += rx_skb->len;
+				netdev_dbg(net_dev, "Rx-ing packet: Size: %d\n",
+					rx_skb->len);
+				netif_rx(rx_skb);
+				rx_skb = NULL;
+			}
 		}
 	}
 	return rx_skb;
