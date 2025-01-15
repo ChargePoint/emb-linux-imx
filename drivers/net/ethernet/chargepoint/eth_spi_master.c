@@ -161,7 +161,6 @@ static int eth_spi_transceive_frame(struct eth_spi *espi)
 	if (!slave_ack) {
 		if (netif_carrier_ok(espi->net_dev)) {
 			netdev_warn(espi->net_dev, "slave ack timeout");
-			netif_carrier_off(espi->net_dev);
 			espi->stats.ack_err++;
 		}
 	} else {
@@ -187,7 +186,6 @@ static int eth_spi_transceive_frame(struct eth_spi *espi)
 			    &espi->ack_comp, msecs_to_jiffies(10)) == 0) {
 			if (netif_carrier_ok(espi->net_dev)) {
 				netdev_warn(espi->net_dev, "slave ack timeout");
-				netif_carrier_off(espi->net_dev);
 				espi->stats.ack_err++;
 			}
 		} else {
@@ -255,7 +253,6 @@ static int eth_spi_transceive(struct eth_spi *espi)
 					   "tx frame %d/%d (len=%d)",
 					   frag_idx + 1, frag_tot, len);
 				if (eth_spi_transceive_frame(espi) == -1) {
-					netif_carrier_off(espi->net_dev);
 					espi->stats.write_err++;
 					return -1;
 				}
@@ -276,7 +273,6 @@ static int eth_spi_transceive(struct eth_spi *espi)
 			memset(espi->tx_frame->buf, 0, ETH_SPI_FRAG_LEN);
 			eth_spi_init_frame(espi->tx_frame, 0, 0, 0);
 			if (eth_spi_transceive_frame(espi) == -1) {
-				netif_carrier_off(espi->net_dev);
 				espi->stats.read_err++;
 				return -1;
 			}
@@ -456,7 +452,6 @@ static void eth_spi_netdev_tx_timeout(struct net_device *dev,
 	netdev_info(espi->net_dev, "Transmit timeout at %ld, latency %ld\n",
 		    jiffies, jiffies - dev_trans_start(dev));
 	espi->net_dev->stats.tx_errors++;
-	netif_carrier_off(espi->net_dev);
 
 	if (espi->spi_thread) {
 		wake_up_process(espi->spi_thread);
