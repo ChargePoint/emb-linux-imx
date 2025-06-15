@@ -779,7 +779,7 @@ EXPORT_SYMBOL_GPL(phy_config_inband_aneg);
  *   If the PHYCONTROL Layer is operating, we change the state to
  *   reflect the beginning of Auto-negotiation or forcing.
  */
-int _phy_start_aneg(struct phy_device *phydev)
+static int _phy_start_aneg(struct phy_device *phydev)
 {
 	int err;
 
@@ -800,7 +800,6 @@ int _phy_start_aneg(struct phy_device *phydev)
 
 	return err;
 }
-EXPORT_SYMBOL(_phy_start_aneg);
 
 /**
  * phy_start_aneg - start auto-negotiation for this PHY device
