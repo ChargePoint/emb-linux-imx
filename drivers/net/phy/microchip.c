@@ -357,7 +357,7 @@ static void lan88xx_link_change_notify(struct phy_device *phydev)
 		if (ret < 0)
 			goto link_change_notify_failed;
 
-		ret = _phy_start_aneg(phydev);
+		ret = phy_start_aneg(phydev);
 		if (ret < 0)
 			goto link_change_notify_failed;
 	}
